@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prospect Intelligence – Clickable Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#DCE1D9;--card:#EEF1EB;--ink:#18191C;--mut:#5d6159;--pri:#B4A9FE;--pd:#5B4B9E;--sec:#9AE69C;--sd:#1f6b2b;--dk:#18191C;--on-dk:#EEF1EB;--line:#cfd5cb;--red:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101113;--card:#1d1f22;--ink:#EEF1EB;--mut:#a3a89f;--pd:#B4A9FE;--sd:#9AE69C;--dk:#2a2c30;--line:#2f3236}}
+:root[data-theme="dark"]{--bg:#101113;--card:#1d1f22;--ink:#EEF1EB;--mut:#a3a89f;--pd:#B4A9FE;--sd:#9AE69C;--dk:#2a2c30;--line:#2f3236}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 14px/1.5 Manrope,system-ui,sans-serif}
+h1,h2,h3,.dm{font-family:"DM Sans",system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+h1{font-size:28px}h2{font-size:18px}h3{font-size:15px}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh;gap:16px;padding:16px}
+nav{background:var(--card);border-radius:28px;padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:16px;height:calc(100vh - 32px)}
+.logo{display:flex;gap:10px;align-items:center;font:700 16px "DM Sans";padding:0 8px 14px}
+.logo i{width:30px;height:30px;border-radius:10px;background:var(--pri);display:block}
+nav button{all:unset;cursor:pointer;padding:11px 14px;border-radius:999px;display:flex;gap:10px;align-items:center;color:var(--mut);font-weight:600}
+nav button:hover{background:var(--bg)}nav button.on{background:var(--pd);color:#fff}
+:root[data-theme="dark"] nav button.on{color:#1c1640}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) nav button.on{color:#1c1640}}
+main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--card);border-radius:28px;padding:22px}
+.dark{background:var(--dk);color:var(--on-dk)}.green{background:var(--sec);color:#10260f}.lav{background:var(--pri);color:#1c1640}
+.row{display:flex;gap:16px;flex-wrap:wrap}.row>*{flex:1 1 220px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.big{font:700 44px/1 "DM Sans"}.mut{color:var(--mut)}.dark .mut,.green .mut,.lav .mut{color:inherit;opacity:.7}
+.btn{all:unset;cursor:pointer;padding:11px 22px;border-radius:999px;font-weight:700;background:var(--pd);color:#fff;text-align:center;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:focus-visible,nav button:focus-visible,.tab:focus-visible,.chip:focus-visible,.seq-step:focus-visible{outline:3px solid var(--pri);outline-offset:2px}
+:root[data-theme="dark"] .btn{color:#1c1640}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn{color:#1c1640}}
+.btn.sec{background:var(--bg);color:var(--ink)}.btn.inv{background:var(--dk);color:var(--on-dk)}.btn.out{background:none;border:2px solid var(--ink);color:var(--ink);padding:9px 20px}.btn[disabled]{opacity:.4;pointer-events:none}
+.btn.sm{padding:6px 14px;font-size:12px}
+.chip{all:unset;cursor:pointer;padding:6px 14px;border-radius:999px;background:var(--bg);font-weight:600;font-size:13px}.chip.on{background:var(--pri);color:#1c1640}
+.tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg)}
+.High,.ok{background:var(--sec);color:#10260f}.Medium,.rev{background:var(--pri);color:#1c1640}.Low,.bad{background:#f3c7c3;color:#5c120d}
+input,textarea,select{width:100%;padding:12px 16px;border-radius:18px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:210px;line-height:1.6;resize:vertical}label{display:block;font-weight:600;margin:12px 0 6px}
+.tabs{display:flex;gap:6px;background:var(--card);padding:6px;border-radius:999px;width:fit-content;max-width:100%;overflow-x:auto}
+.tab{all:unset;cursor:pointer;padding:8px 20px;border-radius:999px;font-weight:700}.tab.on{background:var(--dk);color:var(--on-dk)}
+.sig{display:flex;gap:14px;align-items:flex-start;cursor:pointer;border:2px solid transparent}.sig.sel{border-color:var(--pd)}
+.sig input{width:20px;height:20px;margin-top:3px;accent-color:#5B4B9E}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:560px}th{text-align:left;color:var(--mut);font-weight:600;padding:8px}td{padding:12px 8px;border-top:1px solid var(--line)}tr.lk{cursor:pointer}tr.lk:hover td{background:var(--bg)}
+.steps{display:flex;flex-direction:column;gap:12px;margin-top:16px}.st{display:flex;gap:12px;align-items:center;opacity:.45}.st.done,.st.act{opacity:1}
+.dot{width:26px;height:26px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-size:13px}.done .dot{background:var(--sec);color:#10260f}.act .dot{background:var(--pri);color:#1c1640}
+.bar{height:8px;border-radius:9px;background:var(--bg);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--pd);transition:width .5s}
+.ang{cursor:pointer;border:2px solid transparent}.ang.sel{border-color:var(--pd)}
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--dk);color:var(--on-dk);padding:10px 20px;border-radius:999px;font-weight:700;opacity:0;transition:.25s;pointer-events:none;z-index:99}#toast.show{opacity:1}
+.ev{padding:10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;font-size:13px;align-items:center}
+/* Sequence timeline styles */
+.seq-bar{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.seq-step{all:unset;cursor:pointer;flex:1 1 160px;min-width:155px;background:var(--card);border:2px solid transparent;border-radius:22px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;transition:border-color .15s,background .15s}
+.seq-step:hover{background:var(--bg)}
+.seq-step.sel{border-color:var(--pd);background:var(--card)}
+.seq-top{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;font-weight:700}
+.seq-day{color:var(--mut);font-weight:700;font-size:12px}
+.seq-title{font-family:"DM Sans",system-ui,sans-serif;font-weight:700;font-size:14px;margin-top:2px}
+.seq-sub{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-sw{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media(max-width:800px){.app{grid-template-columns:1fr;padding:12px}nav{position:static;height:auto;flex-direction:row;overflow-x:auto;border-radius:24px}.logo{display:none}nav button{white-space:nowrap}h1{font-size:24px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<div class="app"><nav id="nav"></nav><main id="main"></main></div><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+
+const PROSPECTS={
+ acme:{
+  id:'acme',name:'Acme Manufacturing',domain:'acme-mfg.com',ind:'Manufacturing',loc:'Detroit, USA',emp:'1,200–5,000 employees',date:'Today',status:'Completed',outreach:'Draft',
+  summary:'Acme designs and manufactures industrial components for automotive and aerospace customers across North America and Europe. Recent direction: new plant capacity in Pune and expansion into Southeast Asia.',
+  sel:[0,1,2],ang:0,custom:'',contactIdx:0,
+  people:[
+   {name:'John Smith',role:'CTO',dept:'Technology',bio:'Joined in Oct 2026; previously VP Engineering at a Tier-1 automotive supplier.',li:'linkedin.com/in/johnsmith-cto'},
+   {name:'Elena Ruiz',role:'COO',dept:'Operations',bio:'Leads global plant operations and oversees the Pune facility rollout.',li:'linkedin.com/in/elenaruiz-ops'},
+   {name:'David Park',role:'CEO',dept:'Executive',bio:'12 years at Acme; spearheading the 2027 Southeast Asia market entry.',li:'linkedin.com/in/davidpark-acme'}
+  ],
+  signals:[
+   {id:0,cat:'Leadership',t:'New CTO appointed',s:'John Smith joined Acme Manufacturing as Chief Technology Officer.',r:'High',why:'New technology leadership often resets strategic priorities and vendor evaluations.',src:'Acme press release',d:'14 Oct 2026'},
+   {id:1,cat:'Expansion',t:'New manufacturing facility announced',s:'Acme announced a third plant in Pune, India.',r:'High',why:'Expansion creates opportunities to standardize and automate operational processes.',src:'Economic Times',d:'28 Sep 2026'},
+   {id:2,cat:'Expansion',t:'International expansion',s:'Acme is entering Southeast Asian markets in 2027.',r:'Medium',why:'Cross-border growth increases multi-site coordination and data pipeline needs.',src:'Acme press release',d:'02 Sep 2026'},
+   {id:3,cat:'Hiring',t:'Hiring AI engineers',s:'Five open roles for ML and data engineers on LinkedIn Jobs.',r:'High',why:'Indicates active investment in internal AI capabilities and platform tooling.',src:'LinkedIn Jobs',d:'Nov 2026'}
+  ],
+  angles:[
+   {t:'Technology transformation',d:'Explore how enterprise AI can support technology priorities after the new CTO appointment.',sig:'New CTO, International expansion',off:'Enterprise AI platform',rcp:'CTO, CIO',why:'The CTO is the decision-maker most likely to own this architectural change.'},
+   {t:'Operational efficiency',d:'Explore AI workflow automation as manufacturing operations expand to Pune.',sig:'New facility, International expansion',off:'Workflow automation',rcp:'COO, Head of Operations',why:'Best fit if reaching operations leaders focused on plant throughput.'},
+   {t:'Business scalability',d:'Discuss scalable data pipelines to support multi-region international growth.',sig:'International expansion, New facility',off:'Data pipeline toolkit',rcp:'CEO, COO',why:'A broader, executive-level framing around global visibility.'}
+  ]
+ },
+ northwind:{
+  id:'northwind',name:'Northwind Logistics',domain:'northwind-log.io',ind:'Logistics & Supply Chain',loc:'Chicago, USA',emp:'3,500–8,000 employees',date:'03 Nov 2026',status:'Completed',outreach:'Approved',
+  summary:'Northwind operates cold-chain and freight forwarding networks across 18 hubs in North America and LATAM. Currently modernizing fleet telemetry and warehouse automation following Series D funding.',
+  sel:[0,1],ang:0,custom:'',contactIdx:0,
+  people:[
+   {name:'Priya Nair',role:'VP of Supply Chain Tech',dept:'Technology',bio:'Leading Northwind’s hub automation and predictive routing initiatives.',li:'linkedin.com/in/priyanair-nw'},
+   {name:'Marcus Vance',role:'Chief Operating Officer',dept:'Operations',bio:'Oversees North American cold-chain hubs and carrier partnerships.',li:'linkedin.com/in/marcusvance'},
+   {name:'Hannah Lin',role:'Director of Data Platform',dept:'Data & AI',bio:'Building real-time sensor ingestion for 4,000+ refrigerated fleet units.',li:'linkedin.com/in/hannahlin-data'}
+  ],
+  signals:[
+   {id:0,cat:'Expansion',t:'Cold-chain hub expansion in Monterrey',s:'Northwind opened two automated distribution centers in Mexico for cross-border freight.',r:'High',why:'New cross-border hubs require unified data pipelines and customs workflow automation.',src:'FreightWaves',d:'29 Oct 2026'},
+   {id:1,cat:'Technology',t:'Legacy TMS migration initiative',s:'Public earnings call mentioned phasing out on-prem dispatch software by Q3 2027.',r:'High',why:'Active migration window creates strong demand for AI workflow and integration partners.',src:'Q3 Investor Brief',d:'18 Oct 2026'},
+   {id:2,cat:'Hiring',t:'Hiring 8 Data Platform Engineers',s:'Recruiting Snowflake and streaming pipeline specialists in Chicago and remote.',r:'Medium',why:'Confirms heavy internal buildout of real-time logistics data infrastructure.',src:'LinkedIn Jobs',d:'25 Oct 2026'}
+  ],
+  angles:[
+   {t:'Cross-border workflow automation',d:'Accelerate customs & dispatch workflows across the new Monterrey cold-chain hubs.',sig:'Cold-chain hub expansion, Legacy TMS migration',off:'Workflow automation',rcp:'VP Supply Chain Tech, COO',why:'Directly ties to their immediate Mexico rollout timeline.'},
+   {t:'Real-time telemetry pipelines',d:'Scale streaming data pipelines during the legacy TMS migration.',sig:'Legacy TMS migration, Hiring Data Engineers',off:'Data pipeline toolkit',rcp:'Director of Data, VP Tech',why:'Reduces engineering backlog while their team is still hiring.'},
+   {t:'Predictive cold-chain AI',d:'Deploy enterprise AI models for spoilage prevention and route optimization.',sig:'Cold-chain hub expansion',off:'Enterprise AI platform',rcp:'COO, VP Supply Chain Tech',why:'High-ROI executive angle for cold-chain margin protection.'}
+  ]
+ },
+ helio:{
+  id:'helio',name:'Helio Foods',domain:'heliofoods.com',ind:'Food & Beverage',loc:'Toronto, Canada',emp:'800–2,000 employees',date:'29 Oct 2026',status:'Completed',outreach:'Draft',
+  summary:'Helio Foods produces plant-based snacks and functional beverages distributed in 14,000+ retail doors. Recently acquired two regional co-packers to bring production in-house.',
+  sel:[0,1],ang:0,custom:'',contactIdx:0,
+  people:[
+   {name:'Marc Dubois',role:'SVP Operations',dept:'Operations',bio:'Integrating newly acquired co-packing plants into Helio’s core ERP and QA systems.',li:'linkedin.com/in/marcdubois-helio'},
+   {name:'Sonia Patel',role:'CIO',dept:'Technology',bio:'Joined 6 months ago from a global CPG brand to lead digital supply chain.',li:'linkedin.com/in/soniapatel-cio'}
+  ],
+  signals:[
+   {id:0,cat:'Expansion',t:'Acquisition of two regional co-packers',s:'Helio acquired Pacific Naturals and Verdant Pack to verticalize manufacturing.',r:'High',why:'Post-merger integration always exposes fragmented ERP, inventory, and QA workflows.',src:'Food Dive',d:'19 Oct 2026'},
+   {id:1,cat:'Leadership',t:'New CIO appointed',s:'Sonia Patel named CIO to unify retail demand forecasting and plant ERP systems.',r:'High',why:'New CIO has a mandate to modernize disparate plant systems within 12 months.',src:'Helio Press Room',d:'04 Oct 2026'},
+   {id:2,cat:'Expansion',t:'National rollout with Whole Foods & Target',s:'Distribution expanding by 3,200 stores in Spring 2027.',r:'Medium',why:'Retail volume surge increases pressure on batch scheduling and fill-rate accuracy.',src:'Progressive Grocer',d:'11 Oct 2026'}
+  ],
+  angles:[
+   {t:'Post-acquisition plant integration',d:'Unify data pipelines and QA workflows across the newly acquired co-packing facilities.',sig:'Co-packer acquisition, New CIO',off:'Data pipeline toolkit',rcp:'SVP Operations, CIO',why:'Post-M&A integration is Marc and Sonia’s #1 operational bottleneck.'},
+   {t:'Retail demand & fulfillment automation',d:'Automate order-to-plant scheduling ahead of the 3,200-store retail expansion.',sig:'National retail rollout, Co-packer acquisition',off:'Workflow automation',rcp:'SVP Operations',why:'Helps prevent stockouts and chargebacks during a major retail launch.'},
+   {t:'Unified CPG AI foundation',d:'Partner with the new CIO to establish a standardized enterprise AI layer.',sig:'New CIO appointed',off:'Enterprise AI platform',rcp:'CIO',why:'Aligns with Sonia’s mandate to modernize legacy CPG tech.'}
+  ]
+ },
+ vertex:{
+  id:'vertex',name:'Vertex Steel',domain:'vertexsteel.co',ind:'Heavy Manufacturing',loc:'Pittsburgh, USA',emp:'2,500–5,000 employees',date:'21 Oct 2026',status:'Partial',outreach:'—',
+  summary:'Vertex Steel supplies specialty structural and automotive-grade steel coils. Facing margin pressure from energy costs and actively exploring predictive maintenance for rolling mills.',
+  sel:[0],ang:0,custom:'',contactIdx:0,
+  people:[
+   {name:'Robert Vance',role:'VP of Plant Engineering',dept:'Engineering',bio:'20-year steel veteran leading predictive maintenance across 4 mills.',li:'linkedin.com/in/robertvance-vertex'},
+   {name:'Claire Sterling',role:'Chief Digital Officer',dept:'Technology',bio:'Tasked with industrial IoT and energy optimization programs.',li:'linkedin.com/in/clairesterling'}
+  ],
+  signals:[
+   {id:0,cat:'Expansion',t:'$85M electric arc furnace upgrade',s:'Vertex announced a major modernization of its Pittsburgh Mill #2.',r:'High',why:'CapEx mill upgrades include budget for sensor data pipelines and AI anomaly detection.',src:'American Metal Market',d:'15 Oct 2026'},
+   {id:1,cat:'Hiring',t:'Hiring Industrial Data Scientists',s:'Three openings for time-series and predictive maintenance specialists.',r:'Medium',why:'Shows commitment to AI-driven downtime reduction.',src:'LinkedIn Jobs',d:'19 Oct 2026'}
+  ],
+  angles:[
+   {t:'Mill modernization data pipelines',d:'Streamline sensor & telemetry data pipelines for the $85M furnace upgrade.',sig:'$85M furnace upgrade, Hiring Data Scientists',off:'Data pipeline toolkit',rcp:'VP Plant Engineering, CDO',why:'Ties directly to an approved $85M CapEx project.'},
+   {t:'Predictive maintenance AI',d:'Accelerate predictive maintenance models to cut unplanned rolling mill downtime.',sig:'Hiring Industrial Data Scientists',off:'Enterprise AI platform',rcp:'CDO, VP Engineering',why:'Helps their lean data science team ship models into production faster.'}
+  ]
+ }
+};
+
+const SEQ_TEMPLATE=[
+ {step:1,day:'Day 1',label:'Initial outreach',ch:'Email',goal:'Hook with primary signal & establish relevance'},
+ {step:2,day:'Day 3',label:'LinkedIn connect',ch:'LinkedIn',goal:'Low-friction social touch referencing Day 1 note'},
+ {step:3,day:'Day 6',label:'Value follow-up',ch:'Email',goal:'Share relevant case study & secondary signal insight'},
+ {step:4,day:'Day 10',label:'Breakup / check-in',ch:'Email',goal:'Polite close-the-loop note with no-pressure CTA'}
+];
+
+const S={
+ view:'dash',
+ pid:'acme',
+ tab:'Overview',
+ filter:'All',
+ tone:'Professional',
+ len:'Standard',
+ stepIdx:0,
+ sequences:{},
+ offerings:[
+  {name:'Enterprise AI platform',desc:'End-to-end model deployment, governance, and RAG pipelines.'},
+  {name:'Workflow automation',desc:'AI-powered orchestration for cross-system operational processes.'},
+  {name:'Data pipeline toolkit',desc:'Real-time streaming and ERP/IoT data unification across sites.'}
+ ]
+};
+
+const curP=()=>PROSPECTS[S.pid];
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)};
+const go=(v,pid)=>{if(pid)S.pid=pid;S.view=v;render();scrollTo(0,0)};
+const NAV=[['dash','Dashboard'],['new','Research Prospect'],['pros','Prospects'],['drafts','Outreach Drafts'],['set','Company Settings']];
+
+function buildStepContent(p,stepIdx){
+ const tpl=SEQ_TEMPLATE[stepIdx];
+ const person=p.people[p.contactIdx]||p.people[0];
+ const first=person.name.split(' ')[0];
+ const greet=S.tone==='Conversational'?`Hi ${first}`:`Hello ${first}`;
+ const isCustom=p.ang==='c'&&p.custom;
+ const angObj=isCustom?{t:p.custom,off:'Enterprise AI platform'}:(p.angles[p.ang]||p.angles[0]);
+ const sigs=p.signals.filter(x=>p.sel.includes(x.id));
+ const priSig=sigs[0]||p.signals[0];
+ const secSig=sigs[1]||p.signals[1]||priSig;
+
+ let subj='',body='';
+ if(stepIdx===0){
+  subj= isCustom
+   ? `Exploring ${p.custom.slice(0,38)} at ${p.name}`
+   : `${p.name}’s ${priSig.t.toLowerCase()} — quick thought for ${first}`;
+  const hook=isCustom
+   ? `Given ${p.name}’s recent momentum (${priSig.t.toLowerCase()}), I was thinking about how your team is approaching ${p.custom.toLowerCase()}.`
+   : `I caught the news about ${p.name}’s ${priSig.t.toLowerCase()}${sigs.length>1?` alongside the ${secSig.t.toLowerCase()}`:''} — exciting chapter for the ${person.dept.toLowerCase()} team.`;
+  const val=S.tone==='Consultative'
+   ? `In similar transitions, we’ve seen ${p.ind.toLowerCase()} leaders get the fastest wins by targeting one high-friction workflow first before scaling across sites. Algoworks partners with teams on ${angObj.off.toLowerCase()} to accelerate that foundation.`
+   : `At Algoworks, we help ${p.ind.toLowerCase()} leaders use our ${angObj.off.toLowerCase()} to cut manual coordination and scale cleanly across sites.`;
+  const extra=S.len==='Detailed'?`\n\nWe recently helped a multi-site ${p.ind.toLowerCase()} team stand up their core pipeline in under 6 weeks without disrupting existing plant operations.`:'';
+  const cta=`Would you be open to a 15-minute call next week to compare notes on your ${person.role} priorities?`;
+  body=tpl.ch==='Email'
+   ? `${greet},\n\n${hook}\n\n${S.len==='Short'?'':val+extra+'\n\n'}${cta}\n\nBest,\nGODY\nAlgoworks`
+   : `${greet} — saw the news on ${p.name}’s ${priSig.t.toLowerCase()}. ${S.len==='Short'?'':`We help ${p.ind.toLowerCase()} teams with ${angObj.off.toLowerCase()} during rollouts like this. `}${cta}`;
+ } else if(stepIdx===1){
+  subj=`LinkedIn Connection / InMail`;
+  body=`${greet} — sent you a quick note earlier this week regarding ${p.name}’s ${priSig.t.toLowerCase()}. Would love to connect here and follow your work leading ${person.dept.toLowerCase()} at ${p.name}.${S.len==='Detailed'?` Happy to share our ${p.ind.toLowerCase()} architecture playbook anytime if useful.`:''}`;
+ } else if(stepIdx===2){
+  subj=`Re: ${p.name}’s ${priSig.t.toLowerCase()} — case study for ${first}`;
+  const mid=S.tone==='Consultative'
+   ? `When teams pair ${priSig.t.toLowerCase()} with ${secSig.t.toLowerCase()}, data handoffs between sites usually become the hidden bottleneck.`
+   : `Following up on my last email — wanted to share a quick relevant benchmark as you focus on ${angObj.t.toLowerCase()}.`;
+  const proof=`We worked with a similar ${p.ind.toLowerCase()} organization to deploy our ${angObj.off.toLowerCase()}, cutting cross-site reporting lag by 64% in the first quarter.`;
+  body=tpl.ch==='Email'
+   ? `${greet},\n\n${mid}\n\n${S.len==='Short'?'':proof+'\n\n'}Worth a quick 12-minute chat this Thursday or Friday to see if a similar approach fits ${p.name}?\n\nBest,\nGODY\nAlgoworks`
+   : `${greet}, quick follow-up: we helped a peer in ${p.ind.toLowerCase()} cut cross-site data lag by 64% using our ${angObj.off.toLowerCase()}. Open to a brief chat this week?`;
+ } else {
+  subj=`Closing the loop — ${p.name} × Algoworks`;
+  body=tpl.ch==='Email'
+   ? `${greet},\n\nI know things are busy with ${priSig.t.toLowerCase()} at ${p.name}, so I won’t keep crowding your inbox.\n\n${S.len==='Short'?'':`If ${angObj.t.toLowerCase()} or ${angObj.off.toLowerCase()} becomes a priority later this quarter, I’d be glad to reconnect.\n\n`}Either way, wishing you and the ${p.name} team a smooth rollout.\n\nBest,\nGODY\nAlgoworks`
+   : `${greet} — know your plate is full with ${priSig.t.toLowerCase()}. I’ll pause outreach here, but let me know if ${angObj.t.toLowerCase()} becomes a priority down the road!`;
+ }
+ return {step:tpl.step,day:tpl.day,label:tpl.label,ch:tpl.ch,goal:tpl.goal,subj,body,appr:false};
+}
+
+function ensureSeq(pid,forceRegen=false){
+ const p=PROSPECTS[pid];
+ if(!S.sequences[pid]||forceRegen){
+  S.sequences[pid]=SEQ_TEMPLATE.map((_,idx)=>buildStepContent(p,idx));
+ }
+ return S.sequences[pid];
+}
+
+// Initialize sequences for pre-existing prospects
+ensureSeq('acme');
+ensureSeq('northwind');
+S.sequences['northwind'].forEach(st=>st.appr=true);
+ensureSeq('helio');
+S.sequences['helio'][0].appr=true;
+ensureSeq('vertex');
+
+window.tg=i=>{
+ const p=curP();
+ p.sel=p.sel.includes(i)?p.sel.filter(x=>x!==i):[...p.sel,i];
+ render();
+};
+window.setF=f=>{S.filter=f;render()};
+window.switchP=pid=>{S.pid=pid;S.stepIdx=0;ensureSeq(pid);render();toast(`Switched to ${PROSPECTS[pid].name}`)};
+
+const pSwitcher=()=>`<div class="p-sw"><span class="mut" style="font-size:12px;font-weight:700">ACTIVE PROSPECT:</span>${Object.values(PROSPECTS).map(p=>`<button class="chip ${S.pid===p.id?'on':''}" onclick="switchP('${p.id}')">${p.name}</button>`).join('')}</div>`;
+
+const sigCards=(p,pick)=>{
+ const list=p.signals.filter(x=>S.filter==='All'||x.cat===S.filter);
+ if(!list.length)return `<div class="card mut">No signals in category "${S.filter}" for ${p.name}.</div>`;
+ return list.map(x=>`<div class="card sig ${pick&&p.sel.includes(x.id)?'sel':''}" ${pick?`onclick="tg(${x.id})"`:''}>${pick?`<input type="checkbox" aria-label="Select ${x.t}" ${p.sel.includes(x.id)?'checked':''}>`:''}<div style="flex:1"><div class="row" style="justify-content:space-between;gap:8px"><h3>${x.t}</h3><span><span class="tag">${x.cat}</span> <span class="tag ${x.r}">${x.r}</span></span></div><div>${x.s}</div><div class="mut" style="margin-top:6px"><b>AI reasoning:</b> ${x.why}</div><div class="mut" style="font-size:12px;margin-top:4px">Source: ${x.src} · Published ${x.d} · Verified</div></div></div>`).join('');
+};
+
+function intel(){
+ const p=curP();
+ const T=['Overview','Signals','People','Sources'];
+ const cats=['All',...new Set(p.signals.map(s=>s.cat))];
+ const highCnt=p.signals.filter(s=>s.r==='High').length;
+ let h=`${pSwitcher()}
+ <div class="row" style="align-items:center;flex-wrap:wrap"><div style="flex:3 1 300px"><h1>${p.name}</h1><div class="mut">${p.domain} · ${p.ind} · ${p.loc} · ${p.emp} · Researched ${p.date}</div></div><div style="display:flex;gap:8px;flex:0 0 auto"><button class="btn sec" onclick="toast('Refreshing research for ${p.name}…')">Refresh research</button><button class="btn" onclick="go('angles')">Outreach angles →</button></div></div>
+ <div class="tabs" role="tablist">${T.map(t=>`<button class="tab ${S.tab==t?'on':''}" onclick="S.tab='${t}';render()">${t}</button>`).join('')}</div>`;
+
+ if(S.tab=='Overview'){
+  h+=`<div class="grid"><div class="card dark" style="grid-column:span 2"><h2>Company summary</h2><p>${p.summary}</p><span class="tag" style="background:var(--pri);color:#1c1640">AI summary · based on ${p.signals.length} verified sources</span></div><div class="card green"><div class="mut">Signals found</div><div class="big">${p.signals.length}</div></div><div class="card lav"><div class="mut">High relevance</div><div class="big">${highCnt}</div></div></div>
+  <div class="grid"><div class="card"><h2>Recent developments</h2>${p.signals.map(x=>`<div class="ev"><span>${x.t}</span><span class="mut">${x.d}</span></div>`).join('')}</div><div class="card"><h2>Decision-makers (${p.people.length})</h2>${p.people.map((person,idx)=>`<div class="ev"><span><b>${person.name}</b> ${idx===p.contactIdx?'<span class="tag ok" style="margin-left:6px">Primary</span>':''}</span><span class="mut">${person.role}</span></div>`).join('')}</div></div>`;
+ }
+ if(S.tab=='Signals'){
+  h+=`<div class="row" style="flex:none"><div style="display:flex;gap:6px;flex-wrap:wrap;flex:1 1 100%">${cats.map(c=>`<button class="chip ${S.filter==c?'on':''}" onclick="setF('${c}')">${c}</button>`).join('')}</div></div>${sigCards(p,true)}<div class="card dark row" style="align-items:center"><div><b>${p.sel.length} signal${p.sel.length==1?'':'s'} selected.</b> <span class="mut">The AI will pick one primary signal and use the rest across your multi-step sequence.</span></div><button class="btn" style="flex:0 0 auto" ${p.sel.length?'':'disabled'} onclick="go('angles')">Continue to angles</button></div>`;
+ }
+ if(S.tab=='People'){
+  h+=`<div class="grid">${p.people.map((person,idx)=>`<div class="card ${idx===p.contactIdx?'lav':''}"><h2>${person.name}</h2><div><b>${person.role}</b> · ${person.dept}</div><p>${person.bio}</p><div class="mut" style="font-size:12px;margin-bottom:12px">${person.li}</div><button class="btn ${idx===p.contactIdx?'inv':'sec'}" onclick="selectContact(${idx})">${idx===p.contactIdx?'Selected contact ✓':'Select for outreach'}</button></div>`).join('')}
+  <div class="card"><h2>Add another contact</h2><label>Full Name</label><input id="nc_name" placeholder="e.g. Sarah Jenkins"><label>Role & Department</label><input id="nc_role" placeholder="e.g. VP Engineering · Technology"><button class="btn sec" style="margin-top:12px" onclick="addContact()">+ Add decision-maker</button></div></div>`;
+ }
+ if(S.tab=='Sources'){
+  h+=`<div class="card tw"><table><tr><th>Source</th><th>Information</th><th>Category</th><th>Published</th><th>Retrieved</th></tr>${p.signals.map(x=>`<tr class="lk" onclick="toast('Opening ${x.src}…')"><td><b>${x.src}</b></td><td>${x.t}</td><td><span class="tag">${x.cat}</span></td><td>${x.d}</td><td>${p.date}</td></tr>`).join('')}</table></div>`;
+ }
+ return h;
+}
+
+window.selectContact=idx=>{
+ const p=curP();
+ p.contactIdx=idx;
+ ensureSeq(p.id,true);
+ toast(`${p.people[idx].name} set as primary contact`);
+ render();
+};
+
+window.addContact=()=>{
+ const name=$('#nc_name')?.value.trim();
+ const roleRaw=$('#nc_role')?.value.trim()||'VP Technology · Technology';
+ if(!name){toast('Please enter a contact name');return}
+ const [role,dept]=roleRaw.split('·').map(s=>s.trim());
+ const p=curP();
+ p.people.push({name,role:role||'Decision Maker',dept:dept||'Leadership',bio:`Added manually to ${p.name} buying committee.`,li:`linkedin.com/in/${name.toLowerCase().replace(/\s+/g,'-')}`});
+ p.contactIdx=p.people.length-1;
+ ensureSeq(p.id,true);
+ toast(`Added and selected ${name}`);
+ render();
+};
+
+function angles(){
+ const p=curP();
+ const person=p.people[p.contactIdx]||p.people[0];
+ const sel=p.signals.filter(x=>p.sel.includes(x.id));
+ return `${pSwitcher()}
+ <div><h1>Choose an outreach angle for ${p.name}</h1><div class="mut">Recipient: <b>${person.name} (${person.role})</b> · Primary signal: <b>${sel[0]?.t||'None'}</b>${sel.length>1?' · Supporting: '+sel.slice(1).map(x=>x.t).join(', '):''}</div></div>
+ <div class="grid">${p.angles.map((a,i)=>`<div class="card ang ${p.ang===i?'sel':''}" onclick="curP().ang=${i};render()"><h2>${a.t}</h2><p>${a.d}</p><div class="mut" style="font-size:13px"><b>Supporting signals:</b> ${a.sig}<br><b>Offering:</b> ${a.off}<br><b>Best for:</b> ${a.rcp}<br><b>Why:</b> ${a.why}</div>${i==0?'<span class="tag High" style="margin-top:8px">Recommended</span>':''}</div>`).join('')}</div>
+ <div class="card ang ${p.ang==='c'?'sel':''}" onclick="curP().ang='c';render()"><h2>Custom outreach angle</h2><div class="mut">Have a specific approach in mind? Tell the AI what you want to communicate across the sequence.</div><textarea style="min-height:70px;margin-top:10px" id="cu" placeholder="e.g. Focus on how AI can improve supply chain visibility during expansion" oninput="curP().custom=this.value" onclick="event.stopPropagation()">${p.custom}</textarea>${p.ang==='c'&&p.custom?`<div class="card" style="background:var(--bg);margin-top:10px;padding:14px"><span class="tag rev">Needs review</span> The expansion signals for ${p.name} are verified, but custom claims without a direct source will be framed exploratorily across all sequence steps.</div>`:''}</div>
+ <div class="row" style="flex:none"><button class="btn sec" style="flex:0 0 auto" onclick="S.view='intel';S.tab='Signals';render()">← Back to signals</button><button class="btn" style="flex:0 0 auto" ${p.ang==='c'&&!p.custom?'disabled':''} onclick="ensureSeq(S.pid,true);S.stepIdx=0;go('draft')">Generate 4-step sequence →</button></div>`;
+}
+
+function draft(){
+ const p=curP();
+ const person=p.people[p.contactIdx]||p.people[0];
+ const seq=ensureSeq(p.id);
+ const curStep=seq[S.stepIdx]||seq[0];
+ const apprCount=seq.filter(s=>s.appr).length;
+ const allAppr=apprCount===seq.length;
+ const c=p.ang==='c';
+ const ev=p.signals.filter(x=>p.sel.includes(x.id)).map(s=>[s.t,s.src,'ok','Verified']);
+ if(c&&p.custom)ev.push([`Custom claim: "${p.custom.slice(0,32)}…"`,'No direct source found','bad','Exploratory']);
+ const q=[['Personalization','ok'],['Evidence',c?'rev':'ok'],['Recency','ok'],['Offering alignment','ok'],['Sequence pacing','ok'],['Length','ok']];
+
+ return `${pSwitcher()}
+ <div class="row" style="align-items:center;flex:none">
+  <div style="flex:3 1 300px">
+   <h1>Multi-step outreach sequence</h1>
+   <div class="mut">To <b>${person.name}</b>, ${person.role} · ${p.name} · ${apprCount}/${seq.length} steps approved</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto">
+   <span class="tag ${allAppr?'ok':'rev'}">${allAppr?'Sequence Approved':`${apprCount} of ${seq.length} Approved`}</span>
+   <button class="btn sm" onclick="approveAll()">${allAppr?'All Approved ✓':'Approve entire sequence'}</button>
+  </div>
+ </div>
+
+ <div class="seq-bar" role="tablist" aria-label="Outreach sequence steps">
+  ${seq.map((st,idx)=>`<button class="seq-step ${S.stepIdx===idx?'sel':''}" onclick="S.stepIdx=${idx};render()">
+   <div class="seq-top"><span class="seq-day">STEP ${st.step} · ${st.day}</span><span class="tag ${st.appr?'ok':'rev'}">${st.appr?'Approved':'Draft'}</span></div>
+   <div class="seq-title">${st.label}</div>
+   <div class="seq-sub">${st.ch} · ${st.goal}</div>
+  </button>`).join('')}
+  <button class="seq-step" style="flex:0 0 130px;min-width:130px;align-items:center;justify-content:center;border-style:dashed;border-color:var(--line)" onclick="addFollowUpStep()">
+   <div class="seq-title">+ Add step</div>
+   <div class="seq-sub">Day ${seq.length*4+2} touchpoint</div>
+  </button>
+ </div>
+
+ <div class="row" style="align-items:flex-start">
+  <div class="card" style="flex:2 1 380px">
+   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div><h2 style="display:inline">Step ${curStep.step}: ${curStep.label} (${curStep.day})</h2><div class="mut" style="font-size:12px">Goal: ${curStep.goal}</div></div>
+    <span class="tag ${curStep.appr?'ok':'rev'}">${curStep.appr?'Step Approved':'Pending review'}</span>
+   </div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap">
+    ${['Email','LinkedIn'].map(x=>`<button class="chip ${curStep.ch==x?'on':''}" onclick="setStepCh('${x}')">${x}</button>`).join('')}
+    <span style="width:10px"></span>
+    ${['Professional','Conversational','Consultative'].map(x=>`<button class="chip ${S.tone==x?'on':''}" onclick="S.tone='${x}';regenStep()">${x}</button>`).join('')}
+    <span style="width:10px"></span>
+    ${['Short','Standard','Detailed'].map(x=>`<button class="chip ${S.len==x?'on':''}" onclick="S.len='${x}';regenStep()">${x}</button>`).join('')}
+   </div>
+   ${curStep.ch=='Email'?`<label>Subject line</label><input value="${curStep.subj.replace(/"/g,'&quot;')}" oninput="updSubj(this.value)">`:''}
+   <label>Message body (${curStep.ch})</label>
+   <textarea oninput="updBody(this.value)">${curStep.body}</textarea>
+   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+    <button class="btn sec" onclick="regenStep();toast('Step regenerated')">Regenerate step</button>
+    <button class="btn out" onclick="go('angles')">Change angle</button>
+    <button class="btn out" onclick="navigator.clipboard?.writeText(curStep.body).catch(()=>{});toast('Step copied to clipboard')">Copy step</button>
+    <button class="btn out" onclick="exportSeq()" ${apprCount?'':'disabled'}>Export sequence (${apprCount}/${seq.length})</button>
+    <button class="btn" onclick="approveStep()">${curStep.appr?'Step Approved ✓':'Approve step '+curStep.step}</button>
+   </div>
+  </div>
+  <div style="flex:1 1 280px;display:flex;flex-direction:column;gap:16px">
+   <div class="card"><h2>Evidence used in sequence</h2>${ev.map(e=>`<div class="ev"><span>${e[0]}<br><span class="mut">${e[1]}</span></span><span><span class="tag ${e[2]}">${e[3]}</span></span></div>`).join('')}</div>
+   <div class="card dark"><h2>Quality checks</h2><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${q.map(x=>`<span class="tag ${x[1]}">${x[0]}</span>`).join('')}</div></div>
+   <div class="card"><h2>Recipient context</h2><div><b>${person.name}</b> · ${person.role}</div><div class="mut" style="margin-top:4px">${person.bio}</div></div>
+  </div>
+ </div>`;
+}
+
+window.setStepCh=ch=>{
+ const seq=ensureSeq(S.pid);
+ seq[S.stepIdx].ch=ch;
+ seq[S.stepIdx].appr=false;
+ render();
+};
+window.regenStep=()=>{
+ const p=curP();
+ const seq=ensureSeq(S.pid);
+ const idx=S.stepIdx;
+ if(idx<SEQ_TEMPLATE.length){
+  const fresh=buildStepContent(p,idx);
+  fresh.ch=seq[idx].ch;
+  seq[idx]=fresh;
+ }
+ render();
+};
+window.updSubj=val=>{
+ const seq=ensureSeq(S.pid);
+ seq[S.stepIdx].subj=val;
+ if(seq[S.stepIdx].appr){seq[S.stepIdx].appr=false;toast('Edited. Step approval revoked.');render()}
+};
+window.updBody=val=>{
+ const seq=ensureSeq(S.pid);
+ seq[S.stepIdx].body=val;
+ if(seq[S.stepIdx].appr){seq[S.stepIdx].appr=false;toast('Edited. Step approval revoked.');render()}
+};
+window.approveStep=()=>{
+ const p=curP();
+ const seq=ensureSeq(S.pid);
+ seq[S.stepIdx].appr=true;
+ const apprCount=seq.filter(s=>s.appr).length;
+ p.outreach=apprCount===seq.length?'Approved':`Draft (${apprCount}/${seq.length})`;
+ toast(`Step ${seq[S.stepIdx].step} approved`);
+ if(S.stepIdx<seq.length-1)S.stepIdx++;
+ render();
+};
+window.approveAll=()=>{
+ const p=curP();
+ const seq=ensureSeq(S.pid);
+ seq.forEach(s=>s.appr=true);
+ p.outreach='Approved';
+ p.status='Completed';
+ toast(`All ${seq.length} sequence steps approved for ${p.name}!`);
+ render();
+};
+window.addFollowUpStep=()=>{
+ const p=curP();
+ const seq=ensureSeq(S.pid);
+ const num=seq.length+1;
+ const day=`Day ${num*3+1}`;
+ const person=p.people[p.contactIdx]||p.people[0];
+ const first=person.name.split(' ')[0];
+ seq.push({
+  step:num,day,label:`Follow-up #${num-1}`,ch:'LinkedIn',goal:'Share new industry insight or quick check-in',
+  subj:`Follow-up touch #${num-1}`,
+  body:`Hi ${first} — sharing a quick thought on how ${p.ind.toLowerCase()} leaders are approaching AI governance this quarter. Let me know if you'd like the full benchmark report!`,
+  appr:false
+ });
+ S.stepIdx=seq.length-1;
+ p.outreach=`Draft (${seq.filter(s=>s.appr).length}/${seq.length})`;
+ toast(`Added Step ${num} (${day})`);
+ render();
+};
+window.exportSeq=()=>{
+ const p=curP();
+ const seq=ensureSeq(S.pid);
+ toast(`Exported ${seq.length}-step sequence for ${p.name} as CSV & DOCX`);
+};
+
+const prospectTable=()=>{
+ const list=Object.values(PROSPECTS);
+ return `<div class="card tw"><table><tr><th>Company</th><th>Primary Contact</th><th>Industry</th><th>Last researched</th><th>Research</th><th>Sequence Status</th><th>Action</th></tr>
+ ${list.map(p=>{
+  const person=p.people[p.contactIdx]||p.people[0];
+  const seq=ensureSeq(p.id);
+  const apprCnt=seq.filter(s=>s.appr).length;
+  const stTag=p.outreach==='Approved'?'ok':p.outreach==='—'?'':'rev';
+  return `<tr class="lk" onclick="S.pid='${p.id}';S.view='intel';S.tab='Overview';render()">
+   <td><b>${p.name}</b><br><span class="mut" style="font-size:12px">${p.domain}</span></td>
+   <td>${person.name}<br><span class="mut" style="font-size:12px">${person.role}</span></td>
+   <td>${p.ind}</td>
+   <td>${p.date}</td>
+   <td><span class="tag ${p.status==='Completed'?'ok':'rev'}">${p.status}</span></td>
+   <td><span class="tag ${stTag}">${p.outreach==='Approved'?'Approved (4/4)':apprCnt?`${apprCnt}/${seq.length} Approved`:p.outreach}</span></td>
+   <td onclick="event.stopPropagation()"><button class="btn sm sec" onclick="S.pid='${p.id}';go('draft')">Sequence →</button></td>
+  </tr>`;
+ }).join('')}</table></div>`;
+};
+
+const draftsTable=()=>{
+ const rows=[];
+ Object.values(PROSPECTS).forEach(p=>{
+  const person=p.people[p.contactIdx]||p.people[0];
+  const seq=ensureSeq(p.id);
+  seq.forEach((st,idx)=>{
+   rows.push({pid:p.id,pName:p.name,contact:`${person.name} (${person.role})`,stepIdx:idx,step:`Step ${st.step}: ${st.label}`,day:st.day,ch:st.ch,appr:st.appr});
+  });
+ });
+ return `<div class="card tw"><table><tr><th>Company</th><th>Contact</th><th>Sequence Step</th><th>Timing</th><th>Channel</th><th>Status</th></tr>
+ ${rows.map(r=>`<tr class="lk" onclick="S.pid='${r.pid}';S.stepIdx=${r.stepIdx};go('draft')">
+  <td><b>${r.pName}</b></td>
+  <td>${r.contact}</td>
+  <td><b>${r.step}</b></td>
+  <td><span class="tag">${r.day}</span></td>
+  <td>${r.ch}</td>
+  <td><span class="tag ${r.appr?'ok':'rev'}">${r.appr?'Approved':'Pending review'}</span></td>
+ </tr>`).join('')}</table></div>`;
+};
+
+const V={
+ dash:()=>{
+  const pList=Object.values(PROSPECTS);
+  const sigTotal=pList.reduce((a,p)=>a+p.signals.length,0);
+  let draftTotal=0,apprTotal=0;
+  pList.forEach(p=>ensureSeq(p.id).forEach(s=>{draftTotal++;if(s.appr)apprTotal++}));
+  return `<div class="row" style="align-items:center;flex:none"><div style="flex:3 1 300px"><h1>Research smarter. Discover opportunities.</h1><div class="mut">Click any prospect below to explore intelligence, signals, and multi-step outreach sequences.</div></div><button class="btn" style="flex:0 0 auto" onclick="go('new')">+ Research new prospect</button></div>
+  <div class="grid"><div class="card dark"><div class="mut">Companies researched</div><div class="big">${pList.length}</div></div><div class="card green"><div class="mut">Verified signals</div><div class="big">${sigTotal}</div></div><div class="card lav"><div class="mut">Sequence touchpoints</div><div class="big">${draftTotal}</div></div><div class="card"><div class="mut">Approved steps</div><div class="big">${apprTotal}</div></div></div>
+  <div><h2 style="margin:4px 0 10px">All Researched Prospects (Click any row to open)</h2>${prospectTable()}</div>`;
+ },
+ new:()=>`<h1>Research new prospect</h1><div class="card" style="max-width:640px"><label>Company name *</label><input id="f_comp" value="Kinetix Robotics"><label>Company website</label><input id="f_dom" value="kinetix-robotics.ai"><label>Industry</label><input id="f_ind" value="Industrial Automation"><label>Contact person *</label><input id="f_per" value="Dr. Aris Thorne"><label>Job designation</label><input id="f_role" value="VP of Autonomy"><label>LinkedIn profile URL</label><input id="f_li" placeholder="Optional" value="linkedin.com/in/aristhorne"><div style="margin-top:18px"><button class="btn" onclick="startNewResearch()">Research prospect</button></div></div>`,
+ prog:()=>`<h1>Researching ${curP().name}</h1><div class="card" style="max-width:560px"><div class="bar"><i id="pb" style="width:0"></i></div><div class="steps" id="stp"></div><div class="mut" style="margin-top:14px">You can leave this screen. Research keeps running.</div></div>`,
+ intel,angles,draft,
+ pros:()=>`<div class="row" style="align-items:center;flex:none"><div style="flex:1"><h1>Prospects directory</h1><div class="mut">All ${Object.keys(PROSPECTS).length} companies have full interactive intelligence profiles and sequences.</div></div><button class="btn" style="flex:0 0 auto" onclick="go('new')">+ Research new prospect</button></div>${prospectTable()}`,
+ drafts:()=>`<div class="row" style="align-items:center;flex:none"><div style="flex:1"><h1>Outreach sequences & drafts</h1><div class="mut">Click any step below to edit or approve inside the sequence builder.</div></div></div>${draftsTable()}`,
+ set:()=>`<h1>Company settings</h1><div class="grid"><div class="card"><h2>Algoworks</h2><div class="mut">algoworks.com · Technology services</div><label>Description</label><textarea style="min-height:90px">AI engineering and enterprise AI solutions for manufacturing, logistics, and high-growth enterprises.</textarea><button class="btn" style="margin-top:12px" onclick="toast('Profile saved')">Save changes</button></div><div class="card"><h2>Offerings</h2>${S.offerings.map(x=>`<div class="ev"><span><b>${x.name}</b><br><span class="mut" style="font-size:12px">${x.desc}</span></span><span class="mut">Active</span></div>`).join('')}<button class="btn sec" style="margin-top:12px" onclick="toast('Synced offerings from algoworks.com')">Import from website</button></div></div>`
+};
+
+const STG=['Identifying company','Enriching company profile','Discovering business signals','Researching decision-makers','Consolidating research','Preparing multi-step sequence'];
+
+window.startNewResearch=()=>{
+ const name=$('#f_comp')?.value.trim()||'New Prospect Co';
+ const domain=$('#f_dom')?.value.trim()||'prospect.com';
+ const ind=$('#f_ind')?.value.trim()||'Enterprise Tech';
+ const per=$('#f_per')?.value.trim()||'Alex Rivera';
+ const role=$('#f_role')?.value.trim()||'CTO';
+ const li=$('#f_li')?.value.trim()||'linkedin.com/in/alexrivera';
+ const id='p_'+Date.now();
+ PROSPECTS[id]={
+  id,name,domain,ind,loc:'Austin, USA',emp:'500–1,500 employees',date:'Just now',status:'Completed',outreach:'Draft',
+  summary:`${name} builds next-generation solutions in ${ind} and is scaling engineering and commercial operations across North America and Europe.`,
+  sel:[0,1,2],ang:0,custom:'',contactIdx:0,
+  people:[
+   {name:per,role,dept:'Technology',bio:`Leading technical architecture and scale initiatives at ${name}.`,li},
+   {name:'Jordan Vance',role:'COO',dept:'Operations',bio:`Oversees global deployment and partner operations at ${name}.`,li:'linkedin.com/in/jordanvance'}
+  ],
+  signals:[
+   {id:0,cat:'Leadership',t:`${per} spearheading next-gen platform`,s:`${per} (${role}) announced a new architectural roadmap for ${name}.`,r:'High',why:'Leadership roadmap shifts create immediate openings for AI & data engineering partners.',src:`${name} Press Release`,d:'Nov 2026'},
+   {id:1,cat:'Expansion',t:'Series C expansion & European hub',s:`${name} is expanding production and customer deployments into Germany and the UK.`,r:'High',why:'Multi-region expansion increases workflow and data integration complexity.',src:'TechCrunch',d:'Oct 2026'},
+   {id:2,cat:'Hiring',t:'Hiring 6 Senior AI & Data Engineers',s:`Active openings for ML infrastructure and pipeline engineers at ${name}.`,r:'Medium',why:'Confirms budget allocation toward internal AI and data scalability.',src:'LinkedIn Jobs',d:'Nov 2026'}
+  ],
+  angles:[
+   {t:'Platform scale & AI acceleration',d:`Support ${per}'s roadmap with production-ready enterprise AI infrastructure.`,sig:`${per} roadmap, Hiring AI Engineers`,off:'Enterprise AI platform',rcp:role,why:`Directly supports ${per}'s top technical mandate.`},
+   {t:'European expansion automation',d:`Automate cross-region operational workflows as ${name} scales into Europe.`,sig:'Series C expansion',off:'Workflow automation',rcp:'COO, VP Operations',why:'Reduces manual overhead during international rollout.'}
+  ]
+ };
+ S.pid=id;
+ ensureSeq(id,true);
+ S.view='prog';
+ render();
+ let i=0;
+ const t=setInterval(()=>{
+  if(S.view!='prog'){clearInterval(t);return}
+  $('#stp').innerHTML=STG.map((s,k)=>`<div class="st ${k<i?'done':k==i?'act':''}"><span class="dot">${k<i?'✓':k+1}</span>${s}</div>`).join('');
+  $('#pb').style.width=i/STG.length*100+'%';
+  if(i++>=STG.length){clearInterval(t);S.tab='Overview';go('intel')}
+ },550);
+};
+
+function render(){
+ const act=['intel','angles','draft','prog'].includes(S.view)?'new':S.view;
+ $('#nav').innerHTML='<div class="logo"><i></i>Prospect IQ</div>'+NAV.map(n=>`<button class="${act==n[0]?'on':''}" onclick="go('${n[0]}')">${n[1]}</button>`).join('');
+ $('#main').innerHTML=V[S.view]();
+}
+render();
+</script></body></html>

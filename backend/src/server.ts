@@ -1,0 +1,368 @@
+import path from 'path';
+import os from 'os';
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import { PROSPECTS_DB, SETTINGS } from './data';
+import {
+  buildFullSequence,
+  buildStepContent,
+  generateFullSequenceWithAI,
+  generateSingleStepWithAI,
+} from './generator';
+import { loadPersistedState, savePersistedState } from './storage';
+import {
+  runLiveProspectResearch,
+  scrapeOfferingsFromSellerDomain,
+  discoverMoreSignalsForProspect,
+} from './researcher';
+import { enrichProspectWithMultiAgentOKFICM } from './okf_icm';
+import { Prospect, Tone, Length, Channel } from './types';
+
+// Load credentials from ~/.env and local .env if present
+dotenv.config({ path: path.join(os.homedir(), '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
+
+loadPersistedState();
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+app.use(cors());
+app.use(express.json());
+
+function updateOutreachStatus(p: Prospect) {
+  const apprCount = p.sequence.filter((s) => s.appr).length;
+  if (apprCount === p.sequence.length && p.sequence.length > 0) {
+    p.outreach = 'Approved';
+    p.status = 'Completed';
+  } else if (apprCount > 0) {
+    p.outreach = `Draft (${apprCount}/${p.sequence.length})`;
+  } else {
+    p.outreach = 'Draft';
+  }
+}
+
+// Health check + AI status
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'prospect-iq-backend',
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    liveScrapingEnabled: true,
+    googleNewsRssEnabled: true,
+  });
+});
+
+// Get all prospects + dashboard metrics
+app.get('/api/prospects', (_req, res) => {
+  const list = Object.values(PROSPECTS_DB);
+  const companiesCount = list.length;
+  const signalsCount = list.reduce((acc, p) => acc + p.signals.length, 0);
+  let stepsCount = 0;
+  let approvedStepsCount = 0;
+  list.forEach((p) => {
+    p.sequence.forEach((s) => {
+      stepsCount++;
+      if (s.appr) approvedStepsCount++;
+    });
+  });
+
+  res.json({
+    prospects: list,
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    metrics: {
+      companiesCount,
+      signalsCount,
+      stepsCount,
+      approvedStepsCount,
+    },
+  });
+});
+
+// Get single prospect by ID
+app.get('/api/prospects/:id', (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+  res.json(p);
+});
+
+// LIVE RESEARCH: Create & research a new prospect online (scrapes website + fetches Google News RSS + Gemini synthesis)
+app.post('/api/prospects', async (req, res) => {
+  try {
+    const {
+      name = 'Stripe',
+      domain = 'stripe.com',
+      ind = 'Fintech & Payments',
+      loc = 'San Francisco, USA',
+      contactName = 'David Singleton',
+      contactRole = 'CTO',
+      contactLi = 'linkedin.com/in/davidsingleton',
+    } = req.body;
+
+    const fullProspect = await runLiveProspectResearch({
+      name,
+      domain,
+      ind,
+      loc,
+      contactName,
+      contactRole,
+      contactLi,
+      settings: SETTINGS,
+    });
+
+    PROSPECTS_DB[fullProspect.id] = fullProspect;
+    savePersistedState();
+
+    res.status(201).json(fullProspect);
+  } catch (err) {
+    console.error('Error researching prospect:', err);
+    res.status(500).json({ error: 'Failed to complete live prospect research' });
+  }
+});
+
+// LIVE REFRESH: Re-run live online research for an existing prospect
+app.post('/api/prospects/:id/refresh', async (req, res) => {
+  try {
+    const existing = PROSPECTS_DB[req.params.id];
+    if (!existing) return res.status(404).json({ error: 'Prospect not found' });
+
+    const primaryPerson = existing.people[existing.contactIdx] || existing.people[0];
+    const refreshed = await runLiveProspectResearch({
+      id: existing.id,
+      name: existing.name,
+      domain: existing.domain,
+      ind: existing.ind,
+      loc: existing.loc,
+      contactName: primaryPerson?.name || 'Executive Contact',
+      contactRole: primaryPerson?.role || 'CTO',
+      contactLi: primaryPerson?.li,
+      settings: SETTINGS,
+    });
+
+    PROSPECTS_DB[existing.id] = refreshed;
+    savePersistedState();
+    res.json(refreshed);
+  } catch (err) {
+    console.error('Error refreshing prospect:', err);
+    res.status(500).json({ error: 'Failed to refresh prospect online' });
+  }
+});
+
+// LIVE DISCOVER MORE SIGNALS: Fetch & synthesize +3 new unique signals for a prospect
+app.post('/api/prospects/:id/signals/more', async (req, res) => {
+  try {
+    const p = PROSPECTS_DB[req.params.id];
+    if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+    const newSignals = await discoverMoreSignalsForProspect(p, SETTINGS, 3);
+    if (newSignals.length > 0) {
+      p.signals.push(...newSignals);
+      // Auto-select newly discovered High-relevance signals
+      newSignals.forEach((s) => {
+        if (s.r === 'High' && !p.sel.includes(s.id)) {
+          p.sel.push(s.id);
+        }
+      });
+      enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
+      savePersistedState();
+    }
+
+    res.json({
+      prospect: p,
+      addedCount: newSignals.length,
+    });
+  } catch (err) {
+    console.error('Error discovering more signals:', err);
+    res.status(500).json({ error: 'Failed to discover more signals' });
+  }
+});
+
+// Update selected signals, angle, or primary contact
+app.patch('/api/prospects/:id', async (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+  const { sel, ang, custom, contactIdx, regenerateSequence, tone, len } = req.body;
+  if (Array.isArray(sel)) p.sel = sel;
+  if (ang !== undefined) p.ang = ang;
+  if (typeof custom === 'string') p.custom = custom;
+  if (typeof contactIdx === 'number') p.contactIdx = contactIdx;
+
+  if (regenerateSequence) {
+    p.sequence = await generateFullSequenceWithAI(
+      p,
+      (tone as Tone) || 'Warm & Catchy',
+      (len as Length) || 'Standard',
+      SETTINGS
+    );
+    updateOutreachStatus(p);
+  }
+
+  enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
+  savePersistedState();
+  res.json(p);
+});
+
+// Export standalone OKF JSON-LD + ICM bundle for a prospect
+app.get('/api/prospects/:id/okf', (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+  if (!p.okf || !p.icm) {
+    enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
+  }
+  res.json({
+    okf: p.okf,
+    icm: p.icm,
+    agentTrace: p.agentTrace,
+  });
+});
+
+// Add a new decision-maker contact to a prospect
+app.post('/api/prospects/:id/people', async (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+  const { name, role = 'Decision Maker', dept = 'Leadership', bio, li } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  p.people.push({
+    name,
+    role,
+    dept,
+    bio: bio || `Added to ${p.name} buying committee.`,
+    li: li || `linkedin.com/in/${name.toLowerCase().replace(/\s+/g, '-')}`,
+  });
+  p.contactIdx = p.people.length - 1;
+  p.sequence = await generateFullSequenceWithAI(p, 'Warm & Catchy', 'Standard', SETTINGS);
+  updateOutreachStatus(p);
+
+  savePersistedState();
+  res.status(201).json(p);
+});
+
+// Update or regenerate a specific sequence step
+app.patch('/api/prospects/:id/sequence/:stepIdx', async (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+  const idx = parseInt(req.params.stepIdx, 10);
+  const step = p.sequence[idx];
+  if (!step) return res.status(404).json({ error: 'Sequence step not found' });
+
+  const { subj, body, ch, appr, regenerate, tone, len } = req.body;
+
+  if (regenerate) {
+    const targetCh = (ch as Channel) || step.ch;
+    p.sequence[idx] = await generateSingleStepWithAI(
+      p,
+      idx,
+      (tone as Tone) || 'Warm & Catchy',
+      (len as Length) || 'Standard',
+      SETTINGS,
+      targetCh
+    );
+  } else {
+    if (typeof subj === 'string') {
+      step.subj = subj;
+      step.appr = false;
+    }
+    if (typeof body === 'string') {
+      step.body = body;
+      step.appr = false;
+    }
+    if (ch) {
+      step.ch = ch;
+      step.appr = false;
+    }
+    if (typeof appr === 'boolean') {
+      step.appr = appr;
+    }
+  }
+
+  updateOutreachStatus(p);
+  savePersistedState();
+  res.json(p);
+});
+
+// Approve entire sequence for a prospect
+app.post('/api/prospects/:id/sequence/approve-all', (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+  p.sequence.forEach((s) => (s.appr = true));
+  updateOutreachStatus(p);
+  savePersistedState();
+  res.json(p);
+});
+
+// Add an extra follow-up touchpoint step to a prospect's sequence
+app.post('/api/prospects/:id/sequence/add-step', (req, res) => {
+  const p = PROSPECTS_DB[req.params.id];
+  if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+  const num = p.sequence.length + 1;
+  const day = `Day ${num * 3 + 1}`;
+  const person = p.people[p.contactIdx] || p.people[0];
+  const first = person.name.split(' ')[0];
+  const extraStep = buildStepContent(p, 1, 'Warm & Catchy', 'Standard', SETTINGS, 'LinkedIn');
+
+  p.sequence.push({
+    step: num,
+    day,
+    label: `Follow-up #${num - 1}`,
+    ch: 'LinkedIn',
+    goal: 'Warm check-in & architecture benchmark share',
+    subj: `${first} — quick follow-up & cheering ${p.name} on!`,
+    body: extraStep.body,
+    appr: false,
+  });
+
+  updateOutreachStatus(p);
+  savePersistedState();
+  res.status(201).json(p);
+});
+
+// Get & update company settings
+app.get('/api/settings', (_req, res) => {
+  res.json(SETTINGS);
+});
+
+app.put('/api/settings', (req, res) => {
+  const { companyName, domain, category, description, senderName, offerings } = req.body;
+  if (companyName) SETTINGS.companyName = companyName;
+  if (domain) SETTINGS.domain = domain;
+  if (category) SETTINGS.category = category;
+  if (description) SETTINGS.description = description;
+  if (senderName) SETTINGS.senderName = senderName;
+  if (Array.isArray(offerings)) SETTINGS.offerings = offerings;
+  savePersistedState();
+  res.json(SETTINGS);
+});
+
+// LIVE OFFERINGS SCRAPER: Scrape seller's actual website to import offerings
+app.post('/api/settings/import-website', async (req, res) => {
+  try {
+    const targetDomain = req.body.domain || SETTINGS.domain;
+    const scraped = await scrapeOfferingsFromSellerDomain(targetDomain);
+    if (scraped.description) {
+      SETTINGS.description = scraped.description;
+    }
+    if (scraped.offerings.length > 0) {
+      SETTINGS.offerings = scraped.offerings;
+    }
+    savePersistedState();
+    res.json({
+      settings: SETTINGS,
+      importedCount: scraped.offerings.length,
+    });
+  } catch (err) {
+    console.error('Error importing website offerings:', err);
+    res.status(500).json({ error: 'Could not scrape website offerings' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Speer Backend (LIVE Research Engine) running on http://localhost:${PORT}`);
+});
