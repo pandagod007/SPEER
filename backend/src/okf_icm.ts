@@ -326,45 +326,141 @@ export function runCriticAgent(
 }
 
 /**
- * Ensures any prospect (including pre-loaded ones) has a complete OKF Graph, ICM Map, and 5-Agent Trace.
+ * Ensures any prospect (including pre-loaded ones) has a complete OKF Graph, ICM Map, and 6-Stage Pipeline Trace.
  */
 export function enrichProspectWithMultiAgentOKFICM(
   p: Prospect,
   settings: CompanySettings,
   harvesterSummary?: string,
-  copywriterSummary?: string
+  copywriterSummary?: string,
+  stageOverrides?: {
+    harvesterDetails?: string[];
+    harvesterDurationMs?: number;
+    newsSummary?: string;
+    newsDetails?: string[];
+    newsDurationMs?: number;
+    synthSummary?: string;
+    synthDetails?: string[];
+    synthDurationMs?: number;
+    copywriterDurationMs?: number;
+  }
 ): Prospect {
+  const primaryPerson = p.people[p.contactIdx] || p.people[0];
+  const highSignalsCount = p.signals.filter((s) => s.r === 'High').length;
+
   const harvesterTrace: AgentTraceLog = {
     agentId: 'harvester',
-    agentName: 'Agent 1: Live Web & News Harvester',
-    role: 'DOM Scraper & Google News RSS Collector',
+    agentName: 'Stage 1: Live Website DOM Harvester',
+    role: 'HTTP Scraper & Company Profile Extractor',
     status: 'completed',
-    durationMs: 410,
+    durationMs: stageOverrides?.harvesterDurationMs || 420,
     summary:
       harvesterSummary ||
-      `Harvested live website metadata from ${p.domain} and verified ${p.signals.length} press/news signals.`,
-    outputArtifact: `${p.signals.length} Verified Signals`,
+      `Connected to https://${p.domain} and extracted company profile, industry classification (${p.ind}), and homepage positioning.`,
+    outputArtifact: `${p.domain} · Profile Enriched`,
+    details: stageOverrides?.harvesterDetails || [
+      `Target Domain: https://${p.domain} (${p.ind} · ${p.loc})`,
+      `Scale & Footprint: ${p.emp}`,
+      `Extracted Executive Summary: ${p.summary.slice(0, 140)}${p.summary.length > 140 ? '…' : ''}`,
+    ],
+  };
+
+  const newsTrace: AgentTraceLog = {
+    agentId: 'news_collector',
+    agentName: 'Stage 2: Google News & Press Signal Collector',
+    role: 'Real-Time RSS & B2B Trigger Scanner',
+    status: 'completed',
+    durationMs: stageOverrides?.newsDurationMs || 510,
+    summary:
+      stageOverrides?.newsSummary ||
+      `Scanned live Google News RSS and press feeds for "${p.name}", isolating ${p.signals.length} verified B2B trigger events.`,
+    outputArtifact: `${p.signals.length} Verified Press Signals`,
+    details:
+      stageOverrides?.newsDetails ||
+      p.signals.map(
+        (s, i) => `Signal #${i + 1} [${s.cat} · ${s.r}]: "${s.t}" — Source: ${s.src} (${s.d})`
+      ),
+  };
+
+  const synthTrace: AgentTraceLog = {
+    agentId: 'ai_synthesizer',
+    agentName: 'Stage 3: AI Prospect & Buying Committee Synthesizer',
+    role: 'Persona Mapping & Outreach Angle Generator',
+    status: 'completed',
+    durationMs: stageOverrides?.synthDurationMs || 640,
+    summary:
+      stageOverrides?.synthSummary ||
+      `Synthesized ${highSignalsCount} High-relevance triggers, ${p.people.length} decision-maker personas (primary: ${primaryPerson?.name}, ${primaryPerson?.role}), and ${p.angles.length} strategic outreach angles.`,
+    outputArtifact: `${p.people.length} Contacts · ${p.angles.length} Outreach Angles`,
+    details:
+      stageOverrides?.synthDetails || [
+        `Primary Decision-Maker: ${primaryPerson?.name} (${primaryPerson?.role} · ${primaryPerson?.dept})`,
+        ...p.angles.map(
+          (a, i) => `Angle #${i + 1}: "${a.t}" → Mapped Offering: ${a.off} (Target: ${a.rcp})`
+        ),
+      ],
   };
 
   const { okf, trace: okfTrace } = runOKFArchitectAgent(p, settings);
   const { icm, trace: icmTrace } = runICMStrategistAgent(p, okf, settings);
 
-  const copywriterTrace: AgentTraceLog = {
-    agentId: 'copywriter',
-    agentName: 'Agent 4: Executive Copywriter Agent',
-    role: 'Polite, Catchy & Warm Sequence Author',
+  // Combine OKF + ICM into Stage 4 with rich details
+  const combinedOkfIcmTrace: AgentTraceLog = {
+    agentId: 'okf_architect',
+    agentName: 'Stage 4: OKF Knowledge Graph & ICM Attribution',
+    role: 'Schema.org Fact Triples & Causal Weight Mapper',
     status: 'completed',
-    durationMs: 680,
-    summary:
-      copywriterSummary ||
-      `Authored ${p.sequence.length}-step polite, catchy & warm sequence grounded in ${icm.chains.length} ICM attribution chains.`,
-    outputArtifact: `${p.sequence.length}-Step Sequence`,
+    durationMs: okfTrace.durationMs + icmTrace.durationMs,
+    summary: `Built OKF-1.4 graph (${okf.entities.length} entities, ${okf.triples.length} provenance triples) and mapped ${icm.chains.length} causal attribution chains to ${settings.companyName} offerings.`,
+    outputArtifact: `${okf.triples.length} OKF Triples · ${icm.chains.length} ICM Chains`,
+    details: [
+      ...icm.weights.map(
+        (w) => `Attribution Weight (${w.weight}%): ${w.factor} ← ${w.sourceNode}`
+      ),
+      ...icm.chains
+        .slice(0, 2)
+        .map(
+          (c) =>
+            `Causal Chain ${c.id}: [${c.signalTripleId}] → ${c.mappedOffering} → ${c.draftClaimAnchor}`
+        ),
+    ],
   };
 
-  const { trace: criticTrace } = runCriticAgent(p, okf, icm, 'Warm & Catchy');
+  const copywriterTrace: AgentTraceLog = {
+    agentId: 'copywriter',
+    agentName: 'Stage 5: Multi-Step Sequence Copywriter',
+    role: 'Multi-Channel Outreach Author (Email + LinkedIn)',
+    status: 'completed',
+    durationMs: stageOverrides?.copywriterDurationMs || 720,
+    summary:
+      copywriterSummary ||
+      `Authored ${p.sequence.length}-step multi-channel outreach sequence for ${primaryPerson?.name} (${primaryPerson?.role}) grounded in ${icm.chains.length} verified signal chains.`,
+    outputArtifact: `${p.sequence.length}-Step Sequence Drafted`,
+    details: p.sequence.map(
+      (st) =>
+        `Step ${st.step} (${st.day} · ${st.ch}): "${st.label}" — ${
+          st.ch === 'Email' ? `Subject: "${st.subj}"` : `Goal: ${st.goal}`
+        }`
+    ),
+  };
+
+  const { audit, trace: criticTrace } = runCriticAgent(p, okf, icm, 'Warm & Catchy');
+  criticTrace.agentName = 'Stage 6: Grounding & Quality Critic Audit';
+  criticTrace.details = [
+    `Salutation Verification: ${audit.salutationCheck}`,
+    `Evidence Grounding Score: ${audit.groundingScore}% across ${okf.triples.length} OKF provenance triples`,
+    `Audit Result: ${audit.notes}`,
+  ];
 
   p.okf = okf;
   p.icm = icm;
-  p.agentTrace = [harvesterTrace, okfTrace, icmTrace, copywriterTrace, criticTrace];
+  p.agentTrace = [
+    harvesterTrace,
+    newsTrace,
+    synthTrace,
+    combinedOkfIcmTrace,
+    copywriterTrace,
+    criticTrace,
+  ];
   return p;
 }

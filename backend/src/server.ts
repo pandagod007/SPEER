@@ -55,9 +55,24 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+function getProspectTimestamp(p: Prospect): number {
+  if (p.id && p.id.startsWith('p_')) {
+    const ts = parseInt(p.id.replace('p_', ''), 10);
+    if (!isNaN(ts)) return ts;
+  }
+  if (p.date) {
+    const cleaned = p.date.replace(/^Live\s*·\s*/i, '').trim();
+    const parsed = Date.parse(cleaned);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
 // Get all prospects + dashboard metrics
 app.get('/api/prospects', (_req, res) => {
-  const list = Object.values(PROSPECTS_DB);
+  const list = Object.values(PROSPECTS_DB).sort(
+    (a, b) => getProspectTimestamp(b) - getProspectTimestamp(a)
+  );
   const companiesCount = list.length;
   const signalsCount = list.reduce((acc, p) => acc + p.signals.length, 0);
   let stepsCount = 0;
@@ -122,6 +137,57 @@ app.post('/api/prospects', async (req, res) => {
   }
 });
 
+// LIVE STREAMING RESEARCH: Streams stage-by-stage execution (NDJSON) as each stage runs
+app.post('/api/prospects/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendEvent = (payload: Record<string, unknown>) => {
+    res.write(JSON.stringify(payload) + '\n');
+  };
+
+  try {
+    const {
+      name = 'Stripe',
+      domain = 'stripe.com',
+      ind = 'Fintech & Payments',
+      loc = 'San Francisco, USA',
+      contactName = 'David Singleton',
+      contactRole = 'CTO',
+      contactLi = 'linkedin.com/in/davidsingleton',
+    } = req.body;
+
+    const fullProspect = await runLiveProspectResearch(
+      {
+        name,
+        domain,
+        ind,
+        loc,
+        contactName,
+        contactRole,
+        contactLi,
+        settings: SETTINGS,
+      },
+      (ev) => {
+        sendEvent(ev as unknown as Record<string, unknown>);
+      }
+    );
+
+    PROSPECTS_DB[fullProspect.id] = fullProspect;
+    savePersistedState();
+
+    sendEvent({ type: 'complete', prospect: fullProspect });
+    res.end();
+  } catch (err) {
+    console.error('Error in streaming prospect research:', err);
+    sendEvent({ type: 'error', error: 'Failed to complete live prospect research' });
+    res.end();
+  }
+});
+
 // LIVE REFRESH: Re-run live online research for an existing prospect
 app.post('/api/prospects/:id/refresh', async (req, res) => {
   try {
@@ -141,12 +207,76 @@ app.post('/api/prospects/:id/refresh', async (req, res) => {
       settings: SETTINGS,
     });
 
+    if (existing.people.length > refreshed.people.length) {
+      const existingNames = new Set(refreshed.people.map((p) => p.name.toLowerCase()));
+      existing.people.forEach((p) => {
+        if (!existingNames.has(p.name.toLowerCase())) {
+          refreshed.people.push(p);
+        }
+      });
+    }
+
     PROSPECTS_DB[existing.id] = refreshed;
     savePersistedState();
     res.json(refreshed);
   } catch (err) {
     console.error('Error refreshing prospect:', err);
     res.status(500).json({ error: 'Failed to refresh prospect online' });
+  }
+});
+
+// LIVE STREAMING REFRESH: Re-run live online research with real-time stage streaming
+app.post('/api/prospects/:id/refresh-stream', async (req, res) => {
+  const existing = PROSPECTS_DB[req.params.id];
+  if (!existing) return res.status(404).json({ error: 'Prospect not found' });
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendEvent = (payload: Record<string, unknown>) => {
+    res.write(JSON.stringify(payload) + '\n');
+  };
+
+  try {
+    const primaryPerson = existing.people[existing.contactIdx] || existing.people[0];
+    const refreshed = await runLiveProspectResearch(
+      {
+        id: existing.id,
+        name: existing.name,
+        domain: existing.domain,
+        ind: existing.ind,
+        loc: existing.loc,
+        contactName: primaryPerson?.name || 'Executive Contact',
+        contactRole: primaryPerson?.role || 'CTO',
+        contactLi: primaryPerson?.li,
+        settings: SETTINGS,
+      },
+      (ev) => {
+        sendEvent(ev as unknown as Record<string, unknown>);
+      }
+    );
+
+    if (existing.people.length > refreshed.people.length) {
+      const existingNames = new Set(refreshed.people.map((p) => p.name.toLowerCase()));
+      existing.people.forEach((p) => {
+        if (!existingNames.has(p.name.toLowerCase())) {
+          refreshed.people.push(p);
+        }
+      });
+    }
+
+    PROSPECTS_DB[existing.id] = refreshed;
+    savePersistedState();
+
+    sendEvent({ type: 'complete', prospect: refreshed });
+    res.end();
+  } catch (err) {
+    console.error('Error in streaming refresh:', err);
+    sendEvent({ type: 'error', error: 'Failed to refresh prospect online' });
+    res.end();
   }
 });
 
@@ -314,7 +444,7 @@ app.post('/api/prospects/:id/sequence/add-step', (req, res) => {
     label: `Follow-up #${num - 1}`,
     ch: 'LinkedIn',
     goal: 'Warm check-in & architecture benchmark share',
-    subj: `${first} — quick follow-up & cheering ${p.name} on!`,
+    subj: extraStep.subj || `Solving ${p.name}'s scaling bottlenecks with ${SETTINGS.companyName}`,
     body: extraStep.body,
     appr: false,
   });

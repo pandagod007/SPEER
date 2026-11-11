@@ -14,7 +14,7 @@ interface PersistedState {
   copyEngineVersion?: number;
 }
 
-const CURRENT_COPY_ENGINE_VERSION = 8;
+const CURRENT_COPY_ENGINE_VERSION = 12;
 
 export function loadPersistedState(): void {
   try {
@@ -26,6 +26,33 @@ export function loadPersistedState(): void {
       const parsed: PersistedState = JSON.parse(raw);
       if (parsed.settings) {
         Object.assign(SETTINGS, parsed.settings);
+        // Clean up any scraped marketing slogans in SETTINGS.offerings
+        if (
+          Array.isArray(SETTINGS.offerings) &&
+          SETTINGS.offerings.some((o) =>
+            /engineer for business|what else can you build|browser does not support/i.test(
+              `${o.name} ${o.desc}`
+            )
+          )
+        ) {
+          SETTINGS.offerings = [
+            {
+              id: 'off_1',
+              name: 'Enterprise AI platform',
+              desc: 'End-to-end model deployment, governance, and RAG pipelines.',
+            },
+            {
+              id: 'off_2',
+              name: 'Workflow automation',
+              desc: 'AI-powered orchestration for cross-system operational processes.',
+            },
+            {
+              id: 'off_3',
+              name: 'Data pipeline toolkit',
+              desc: 'Real-time streaming and ERP/IoT data unification across sites.',
+            },
+          ];
+        }
       }
       if (parsed.prospects) {
         Object.keys(PROSPECTS_DB).forEach((k) => delete PROSPECTS_DB[k]);
@@ -46,9 +73,23 @@ export function loadPersistedState(): void {
                 if (/AI.*AI/i.test(cleanTitle)) {
                   cleanTitle = `${p.name} platform & roadmap acceleration`;
                 }
+                let cleanOff = a.off;
+                if (/engineer for business|what else can you build|key technologies|everyday ai/i.test(cleanOff)) {
+                  cleanOff =
+                    idx === 0
+                      ? 'Enterprise AI platform'
+                      : idx === 1
+                      ? 'Workflow automation'
+                      : 'Data pipeline toolkit';
+                }
                 let cleanDesc = a.d;
-                if (/\([^)]*$/.test(cleanDesc) || /for ac\)/i.test(cleanDesc) || /comp\)/i.test(cleanDesc)) {
-                  cleanDesc = `Align ${a.off.toLowerCase()} with ${p.name}’s latest growth and product initiatives.`;
+                if (
+                  /\([^)]*$/.test(cleanDesc) ||
+                  /for ac\)/i.test(cleanDesc) ||
+                  /comp\)/i.test(cleanDesc) ||
+                  /engineer for business/i.test(cleanDesc)
+                ) {
+                  cleanDesc = `Align ${cleanOff.toLowerCase()} with ${p.name}’s latest growth and product initiatives.`;
                 }
                 let cleanSigStr = a.sig;
                 if (noiseRegex.test(cleanSigStr)) {
@@ -57,6 +98,7 @@ export function loadPersistedState(): void {
                 return {
                   ...a,
                   t: idx === 0 ? cleanTitle : a.t,
+                  off: cleanOff,
                   d: cleanDesc,
                   sig: cleanSigStr,
                 };
@@ -72,7 +114,7 @@ export function loadPersistedState(): void {
           savePersistedState();
         } else {
           Object.values(PROSPECTS_DB).forEach((p) => {
-            if (!p.okf || !p.icm || !p.agentTrace) {
+            if (!p.okf || !p.icm || !p.agentTrace || p.agentTrace.length < 6 || !p.agentTrace[0]?.details) {
               enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
             }
           });

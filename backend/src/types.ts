@@ -110,13 +110,21 @@ export interface ICMContextMap {
 // Multi-Agent System (MAS) Execution Trace
 // ==========================================
 export interface AgentTraceLog {
-  agentId: 'harvester' | 'okf_architect' | 'icm_strategist' | 'copywriter' | 'critic';
+  agentId:
+    | 'harvester'
+    | 'news_collector'
+    | 'ai_synthesizer'
+    | 'okf_architect'
+    | 'icm_strategist'
+    | 'copywriter'
+    | 'critic';
   agentName: string;
   role: string;
   status: 'completed' | 'warning';
   durationMs: number;
   summary: string;
   outputArtifact: string;
+  details?: string[];
 }
 
 export interface Prospect {

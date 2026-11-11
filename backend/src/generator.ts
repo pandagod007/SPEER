@@ -543,10 +543,15 @@ export function distillSignalToNaturalHook(
 }
 
 /**
- * Lowercases offering names for mid-sentence flow while preserving uppercase acronyms like AI, ERP, IoT, QA.
+ * Lowercases offering names for mid-sentence flow while preserving uppercase acronyms like AI, ERP, IoT, QA,
+ * and sanitizing any scraped marketing slogans into clean capability phrases.
  */
 function formatOfferingMidSentence(offeringName: string): string {
-  return (offeringName || 'Enterprise AI platform')
+  const raw = (offeringName || 'Enterprise AI platform').trim();
+  if (/engineer for business|what else can you build|key technologies|everyday ai/i.test(raw)) {
+    return 'enterprise AI & workflow automation';
+  }
+  return raw
     .toLowerCase()
     .replace(/\bai\b/g, 'AI')
     .replace(/\berp\b/g, 'ERP')
@@ -650,6 +655,188 @@ function buildContextualValueProp(
   };
 }
 
+/**
+ * Converts an offering name into a natural plural/actionable capability phrase for subject lines
+ * (so we never say "automates enterprise AI platform" or "unifies data pipeline toolkit").
+ */
+function formatOfferingForSubject(offeringName: string): string {
+  const raw = (offeringName || '').trim();
+  if (/data\s+pipeline\s+toolkit/i.test(raw)) return 'real-time data pipelines';
+  if (/enterprise\s+ai\s+platform/i.test(raw)) return 'enterprise AI & data pipelines';
+  if (/workflow\s+automation/i.test(raw)) return 'cross-system workflow automation';
+  if (/engineer for business|what else can you build|key technologies|everyday ai/i.test(raw)) {
+    return 'enterprise AI & workflow automation';
+  }
+  return formatOfferingMidSentence(raw);
+}
+
+/**
+ * Builds catchy, high-converting subject lines that directly address the specific problem
+ * the prospect company is facing (from their live signal) and state how our company solves it.
+ */
+function buildProblemSolutionSubjects(
+  archetype: DistilledSignalHook['archetype'],
+  priHook: DistilledSignalHook,
+  companyName: string,
+  sellerName: string,
+  offeringName: string,
+  shortName: string,
+  role: string,
+  ind: string
+): {
+  step1: string;
+  step2: string;
+  step3: string;
+  step4: string;
+} {
+  const offSubj = formatOfferingForSubject(offeringName);
+
+  if (archetype === 'industrial') {
+    return {
+      step1: `Solving ${companyName}'s legacy PLC & sensor data silos during mill modernization — how ${sellerName} automates ${offSubj}`,
+      step2: `Unifying plant-floor telemetry at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} eliminates sensor pipeline blind spots for ${companyName}'s plant commissioning`,
+      step4: `Removing predictive-maintenance data bottlenecks at ${companyName} — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (archetype === 'funding' || archetype === 'founder_story') {
+    return {
+      step1: `Stopping custom integration debt from slowing ${companyName}'s post-funding velocity — how ${sellerName} solves it`,
+      step2: `Protecting ${companyName}'s core engineering bandwidth with ${sellerName}`,
+      step3: `How ${sellerName} offloads ${offSubj} plumbing so ${companyName}'s engineers ship 2x faster`,
+      step4: `Eliminating scaling bottlenecks on ${companyName}'s roadmap — ${sellerName} is here when timing aligns, ${shortName}`,
+    };
+  }
+
+  if (archetype === 'ma') {
+    return {
+      step1: `Solving post-acquisition stack & data silos at ${companyName} — how ${sellerName} unifies ${offSubj} in weeks`,
+      step2: `Eliminating post-merger integration friction at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} cuts post-acquisition data & workflow integration from quarters to weeks for ${companyName}`,
+      step4: `De-risking ${companyName}'s stack integration — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (archetype === 'leadership') {
+    const rName = /^(CTO|CIO|CDO|COO|CEO)$/i.test(role) ? role.toUpperCase() : 'leadership';
+    return {
+      step1: `Clearing brittle data handoffs in your first 90 days at ${companyName} — how ${sellerName} solves it`,
+      step2: `Removing legacy integration bottlenecks on ${companyName}'s ${rName} roadmap with ${sellerName}`,
+      step3: `How ${sellerName} solves cross-system ${offSubj} debt for ${companyName} without a 6-month freeze`,
+      step4: `Eliminating technical debt on ${companyName}'s roadmap — ${sellerName} is here when needed, ${shortName}`,
+    };
+  }
+
+  if (archetype === 'expansion') {
+    const isRetailRollout = /whole\s+foods|target|retail/i.test(priHook.shortHook);
+    if (isRetailRollout) {
+      return {
+        step1: `Solving ${companyName}'s 3,200-store fulfillment & QA data bottlenecks — how ${sellerName} automates ${offSubj}`,
+        step2: `Eliminating retail rollout fulfillment friction at ${companyName} with ${sellerName}`,
+        step3: `How ${sellerName} stops manual ERP & supply-chain fire drills during ${companyName}'s national expansion`,
+        step4: `Keeping ${companyName}'s retail expansion bottleneck-free — ${sellerName} is ready when you are, ${shortName}`,
+      };
+    }
+    return {
+      step1: `Solving multi-site ERP & data silos in ${companyName}'s expansion — how ${sellerName} automates ${offSubj}`,
+      step2: `Eliminating cross-site coordination bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} removes manual reconciliation across ${companyName}'s new hubs in under 45 days`,
+      step4: `Solving multi-region scaling bottlenecks at ${companyName} — ${sellerName} is here when timing aligns, ${shortName}`,
+    };
+  }
+
+  if (archetype === 'hiring') {
+    return {
+      step1: `Stopping data-plumbing backlogs while ${companyName} scales hiring — how ${sellerName} bridges the gap`,
+      step2: `Solving ${companyName}'s engineering bandwidth crunch with ${sellerName}`,
+      step3: `How ${sellerName} automates ${offSubj} today so ${companyName}'s team ships without waiting on new hires`,
+      step4: `Keeping ${companyName}'s delivery on schedule while you hire — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  // Default product / tech / migration / industry-specific bottlenecks
+  if (/migration|legacy\s+tms|erp/i.test(priHook.shortHook)) {
+    return {
+      step1: `Eliminating legacy migration downtime & data silos at ${companyName} — how ${sellerName} solves it`,
+      step2: `De-risking ${companyName}'s legacy cutover with ${sellerName}`,
+      step3: `How ${sellerName} automates zero-disruption ${offSubj} migration for ${companyName} in 6 weeks`,
+      step4: `Solving ${companyName}'s system migration bottlenecks — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (/logistics|supply\s+chain/i.test(ind)) {
+    return {
+      step1: `Eliminating cross-hub freight & TMS data blind spots at ${companyName} — how ${sellerName} solves it`,
+      step2: `Solving supply-chain data bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} automates real-time shipment & ERP reconciliation for ${companyName}`,
+      step4: `Removing supply-chain scaling hurdles at ${companyName} — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (/heavy\s+manufacturing|steel/i.test(ind)) {
+    return {
+      step1: `Eliminating legacy PLC & plant-floor telemetry silos at ${companyName} — how ${sellerName} solves it`,
+      step2: `Unifying plant-floor telemetry at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} automates predictive maintenance & sensor pipelines for ${companyName}`,
+      step4: `Removing plant engineering bottlenecks at ${companyName} — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (/manufacturing/i.test(ind)) {
+    return {
+      step1: `Solving multi-plant ERP & production data silos at ${companyName} — how ${sellerName} automates ${offSubj}`,
+      step2: `Eliminating plant-to-ERP workflow bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} cuts manual cross-plant data reconciliation by 60% for ${companyName}`,
+      step4: `Removing production scaling hurdles at ${companyName} — ${sellerName} is here when timing is right, ${shortName}`,
+    };
+  }
+
+  if (/fintech|payment/i.test(ind)) {
+    return {
+      step1: `Solving real-time AI routing & compliance pipeline bottlenecks at ${companyName} — how ${sellerName} accelerates delivery`,
+      step2: `Eliminating financial data & compliance plumbing bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} offloads custom ${offSubj} plumbing so ${companyName}'s engineers ship 2x faster`,
+      step4: `Removing production AI & payment pipeline hurdles at ${companyName} — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (/cloud|security/i.test(ind)) {
+    return {
+      step1: `Eliminating enterprise AI inference & data-pipeline bottlenecks at ${companyName} — how ${sellerName} solves it`,
+      step2: `Solving high-throughput AI orchestration bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} cuts custom ${offSubj} integration work by 60% for ${companyName}`,
+      step4: `Removing platform scaling hurdles at ${companyName} — ${sellerName} is here when timing aligns, ${shortName}`,
+    };
+  }
+
+  if (/e-?commerce|retail/i.test(ind)) {
+    return {
+      step1: `Solving high-volume merchant data & AI workflow bottlenecks at ${companyName} — how ${sellerName} accelerates shipping`,
+      step2: `Eliminating commerce data-pipeline bottlenecks at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} automates cross-platform ${offSubj} for ${companyName} in weeks`,
+      step4: `Removing commerce scaling hurdles at ${companyName} — ${sellerName} is ready when you are, ${shortName}`,
+    };
+  }
+
+  if (/hospital|health|medical/i.test(ind) || /hospital/i.test(companyName)) {
+    return {
+      step1: `Eliminating fragmented patient-care & clinical workflow silos at ${companyName} — how ${sellerName} solves it`,
+      step2: `Solving clinical & operational data silos at ${companyName} with ${sellerName}`,
+      step3: `How ${sellerName} unifies hospital data & automated workflows for ${companyName}`,
+      step4: `Removing operational data hurdles at ${companyName} — ${sellerName} is here when timing is right, ${shortName}`,
+    };
+  }
+
+  const cleanInd = cleanIndustryLabel(ind);
+  return {
+    step1: `Solving ${companyName}'s cross-system data & scaling bottlenecks — how ${sellerName} accelerates ${offSubj}`,
+    step2: `Eliminating engineering bottlenecks on ${companyName}'s ${cleanInd} roadmap with ${sellerName}`,
+    step3: `How ${sellerName} cuts custom ${offSubj} integration work by 60% for ${companyName}`,
+    step4: `Removing production scaling hurdles at ${companyName} — ${sellerName} is here when timing is right, ${shortName}`,
+  };
+}
+
 export function buildStepContent(
   p: Omit<Prospect, 'sequence'>,
   stepIdx: number,
@@ -706,6 +893,17 @@ export function buildStepContent(
     tone
   );
 
+  const probSolSubjects = buildProblemSolutionSubjects(
+    effectiveArchetype,
+    priHook,
+    p.name,
+    seller,
+    angObj.off,
+    shortName,
+    person.role,
+    p.ind
+  );
+
   const hasDistinctSecondary =
     sigs.length > 1 &&
     secSig &&
@@ -718,12 +916,12 @@ export function buildStepContent(
   let body = '';
 
   if (stepIdx === 0) {
-    // High-open-rate, personalized, warm & catchy subject line
+    // Problem-focused + how our company solves it catchy subject line
     subj = isCustom
-      ? `${shortName} — ${p.name}'s momentum + a quick thought on ${trimDanglingWords(
+      ? `Solving ${p.name}'s ${trimDanglingWords(
           p.custom.toLowerCase().split(/\s+/).slice(0, 5).join(' ')
-        )}`
-      : priHook.subjLineStep1;
+        )} bottlenecks — how ${seller} delivers it`
+      : probSolSubjects.step1;
 
     // Polite, warm, catchy opening paragraph that makes immediate sense
     let opener = '';
@@ -762,7 +960,7 @@ export function buildStepContent(
           }${cta}\n\n${warmSignOff}`
         : `${salutation} hope your week is going well! ${priHook.warmCongratsSingle}. ${valueProp.pokeTheBearQuestion} Would love to share a quick 2-page playbook on how peer ${cleanInd} teams solved this with our ${formatOfferingMidSentence(angObj.off)} if helpful!`;
   } else if (stepIdx === 1) {
-    subj = priHook.subjLineStep2;
+    subj = probSolSubjects.step2;
     const secMention =
       hasDistinctSecondary && secHook.archetype === 'founder_story'
         ? ` (${secHook.warmCombinedSecondary}!)`
@@ -782,7 +980,7 @@ export function buildStepContent(
         : `\n\nWould love to stay connected here either way!`
     }`;
   } else if (stepIdx === 2) {
-    subj = priHook.subjLineStep3;
+    subj = probSolSubjects.step3;
     const secondHookRef = hasDistinctSecondary
       ? `Hope your week is going smoothly! Thinking about ${priHook.shortHook} alongside ${secHook.shortHook}, keeping cross-system data and workflow handoffs clean usually becomes the #1 priority for ${person.dept.toLowerCase()} teams.`
       : `Hope your week is going smoothly! Following up briefly on my note about ${priHook.shortHook}—most ${naturalPeerGroup(
@@ -801,7 +999,7 @@ export function buildStepContent(
           }${step3Cta}\n\n${warmSignOff}`
         : `${salutation} quick thought as ${p.name} moves forward on ${priHook.shortHook}: we just put together a short 2-page teardown on how a peer ${cleanInd} team automated those cross-system workflows in 45 days. Open to me dropping it here for you?`;
   } else {
-    subj = priHook.subjLineStep4;
+    subj = probSolSubjects.step4;
     const rawAngleTopic = trimDanglingWords(
       angObj.t
         .replace(new RegExp(`^${p.ind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '')
@@ -858,12 +1056,13 @@ POLITE, CATCHY & WARM HIGH-OPEN-RATE B2B COPYWRITING RULES:
      * If they are a FinTech / AI / SaaS company raising capital or launching software (e.g., Zamp raising $30M for a sales tax OS, Stripe launching AI agents), talk about keeping senior engineers focused on core product/AI velocity rather than getting bogged down in custom ERP connectors, data pipelines, and compliance guardrails.
      * NEVER mention steel mills, furnaces, or legacy PLCs unless the company is literally a heavy manufacturing/steel company modernizing a physical furnace or mill!
 
-3. SUBJECT LINES THAT GUARANTEE OPENS:
-   - The subject line is critical: it must be polite, catchy, warm, and hyper-personalized so the recipient will CERTAINLY open the message.
-   - Include the recipient's first name + their specific milestone/company + a warm curiosity hook:
-     * Step 1 example: "Raghav — huge congrats on Zamp's $30M raise (+ a quick thought on the sales tax OS)"
-     * Step 3 example: "Quick architecture idea as Zamp scales the sales tax OS, Raghav"
-     * Step 4 example: "Cheering Zamp on from the sidelines, Raghav!"
+3. CATCHY PROBLEM + SOLUTION SUBJECT LINES (CRITICAL):
+   - Every subject line MUST be catchy, directly address the specific operational or engineering problem the prospect company is facing (inferred from their signal), and explicitly state how our company ([Seller]) solves it!
+   - Never write generic "congrats" or vague "quick thought" subject lines. Instead, use the Problem → Solution formula:
+     * Step 1 example: "Solving Zamp's post-$30M integration backlog — how Algoworks automates enterprise AI pipelines"
+     * Step 1 example (Expansion): "Eliminating Acme's Pune plant data silos — how Algoworks automates multi-site workflows"
+     * Step 3 example: "How Algoworks cuts custom ERP & data-pipeline work by 60% for Zamp's engineering team"
+     * Step 4 example: "Removing scaling bottlenecks on Zamp's roadmap — Algoworks is ready when you are, Raghav"
 
 4. STRUCTURE & SIGN-OFF:
    - Keep paragraphs crisp (1-2 sentences per paragraph) with clean visual spacing.
@@ -941,7 +1140,7 @@ Return ONLY a valid JSON array of 4 objects matching these 4 steps:
     "label": "Initial outreach",
     "ch": "Email",
     "goal": "Warm, catchy milestone hook + tailored operational insight & high-open-rate subject line",
-    "subj": "Catchy, warm, personalized subject line with ${shortName} and ${p.name}'s specific milestone that guarantees an open",
+    "subj": "Catchy Problem + Solution subject line addressing the specific bottleneck ${p.name} faces and how ${seller} solves it with ${angObj.off}",
     "body": "Full message body with double line breaks (\\n\\n) between short paragraphs"
   }
 ]`;
@@ -1039,7 +1238,7 @@ Tone: Polite, Catchy, and Warm (${tone}). Target length: ${wordGuide}.
 
 Return ONLY valid JSON:
 {
-  "subj": "Catchy, warm, personalized subject line that makes ${shortName} certainly open the message",
+  "subj": "Catchy Problem + Solution subject line addressing the specific problem ${p.name} is facing and how ${seller} solves it",
   "body": "Complete ${ch} message body with short, warm paragraphs"
 }`;
 

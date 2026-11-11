@@ -1,19 +1,54 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Prospect, CompanySettings, Tone, Length, Channel } from '@/types';
+import { Prospect, CompanySettings, Tone, Length, Channel, AgentTraceLog } from '@/types';
 
 type ViewMode = 'dash' | 'new' | 'prog' | 'intel' | 'angles' | 'draft' | 'pros' | 'drafts' | 'set';
 type IntelTab = 'Overview' | 'Signals' | 'People' | 'Sources';
 
-const STAGES = [
-  'Identifying company',
-  'Enriching company profile',
-  'Discovering business signals',
-  'Researching decision-makers',
-  'Consolidating research',
-  'Preparing prospect intelligence',
+const PIPELINE_STAGES: Array<{ title: string; role: string }> = [
+  {
+    title: 'Stage 1: Live Website DOM Harvester',
+    role: 'HTTP Scraper & Company Profile Extractor',
+  },
+  {
+    title: 'Stage 2: Google News & Press Signal Collector',
+    role: 'Real-Time RSS & B2B Trigger Scanner',
+  },
+  {
+    title: 'Stage 3: AI Prospect & Buying Committee Synthesizer',
+    role: 'Persona Mapping & Outreach Angle Generator',
+  },
+  {
+    title: 'Stage 4: OKF Knowledge Graph & ICM Attribution',
+    role: 'Schema.org Fact Triples & Causal Weight Mapper',
+  },
+  {
+    title: 'Stage 5: Multi-Step Sequence Copywriter',
+    role: 'Multi-Channel Outreach Author (Email + LinkedIn)',
+  },
+  {
+    title: 'Stage 6: Grounding & Quality Critic Audit',
+    role: 'OKF Grounding & Salutation Auditor',
+  },
 ];
+
+function getProspectTimestamp(p: Prospect): number {
+  if (p.id && p.id.startsWith('p_')) {
+    const ts = parseInt(p.id.replace('p_', ''), 10);
+    if (!isNaN(ts)) return ts;
+  }
+  if (p.date) {
+    const cleaned = p.date.replace(/^Live\s*·\s*/i, '').trim();
+    const parsed = Date.parse(cleaned);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function sortProspectsLatestFirst(list: Prospect[]): Prospect[] {
+  return list.slice().sort((a, b) => getProspectTimestamp(b) - getProspectTimestamp(a));
+}
 
 export default function ProspectIQApp() {
   const [view, setView] = useState<ViewMode>('dash');
@@ -31,7 +66,12 @@ export default function ProspectIQApp() {
   const [tone, setTone] = useState<Tone>('Warm & Catchy');
   const [len, setLen] = useState<Length>('Standard');
   const [progStep, setProgStep] = useState<number>(0);
+  const [isRunningLive, setIsRunningLive] = useState<boolean>(false);
+  const [liveStageTraces, setLiveStageTraces] = useState<Array<AgentTraceLog | null>>(
+    Array(PIPELINE_STAGES.length).fill(null)
+  );
   const [researchingName, setResearchingName] = useState<string>('');
+  const [researchingDomain, setResearchingDomain] = useState<string>('');
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loadingMoreSignals, setLoadingMoreSignals] = useState<boolean>(false);
   const [generatingSeq, setGeneratingSeq] = useState<boolean>(false);
@@ -49,6 +89,8 @@ export default function ProspectIQApp() {
   // New contact inside People tab
   const [newContactName, setNewContactName] = useState('');
   const [newContactRole, setNewContactRole] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -65,7 +107,7 @@ export default function ProspectIQApp() {
       ]);
       if (pRes.ok) {
         const data = await pRes.json();
-        setProspects(data.prospects || []);
+        setProspects(sortProspectsLatestFirst(data.prospects || []));
         setGeminiConfigured(Boolean(data.geminiConfigured));
       }
       if (sRes.ok) {
@@ -86,7 +128,9 @@ export default function ProspectIQApp() {
   const curP = prospects.find((p) => p.id === activePid) || prospects[0];
 
   const updateProspectInState = (updated: Prospect) => {
-    setProspects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setProspects((prev) =>
+      sortProspectsLatestFirst(prev.map((p) => (p.id === updated.id ? updated : p)))
+    );
   };
 
   // Toggle signal selection
@@ -241,69 +285,130 @@ export default function ProspectIQApp() {
     }
   };
 
-  // LIVE ONLINE RESEARCH: Fetch real website + Google News RSS + Gemini synthesis
-  const startNewProspectResearch = async () => {
-    const targetName = formComp.trim() || 'Stripe';
-    setResearchingName(targetName);
-    setProgStep(0);
-    setView('prog');
+  // Stream helper for real-time stage-by-stage execution
+  const consumeStageStream = async (
+    url: string,
+    bodyPayload?: Record<string, unknown>
+  ): Promise<Prospect | null> => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: bodyPayload ? { 'Content-Type': 'application/json' } : undefined,
+      body: bodyPayload ? JSON.stringify(bodyPayload) : undefined,
+    });
+    if (!res.ok) return null;
 
-    // Advance progress UI while live HTTP scraping + RSS + AI finishes
-    const interval = setInterval(() => {
-      setProgStep((prev) => (prev < STAGES.length - 1 ? prev + 1 : prev));
-    }, 650);
+    if (!res.body) {
+      return await res.json();
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let completedProspect: Prospect | null = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const ev = JSON.parse(trimmed);
+          if (ev.type === 'stage_start' && typeof ev.stageIdx === 'number') {
+            setProgStep(ev.stageIdx);
+          } else if (ev.type === 'stage_complete' && typeof ev.stageIdx === 'number' && ev.trace) {
+            setLiveStageTraces((prev) => {
+              const next = [...prev];
+              next[ev.stageIdx] = ev.trace;
+              return next;
+            });
+            setProgStep(ev.stageIdx + 1);
+          } else if (ev.type === 'complete' && ev.prospect) {
+            completedProspect = ev.prospect;
+          }
+        } catch {
+          // ignore malformed chunk
+        }
+      }
+    }
+    return completedProspect;
+  };
+
+  // LIVE ONLINE RESEARCH: Stream each stage in the background without forcibly redirecting to validator
+  const startNewProspectResearch = async () => {
+    if (isRunningLive) return;
+    const targetName = formComp.trim() || 'Stripe';
+    const targetDomain = formDom.trim() || 'stripe.com';
+    setResearchingName(targetName);
+    setResearchingDomain(targetDomain);
+    setProgStep(0);
+    setIsRunningLive(true);
+    setLiveStageTraces(Array(PIPELINE_STAGES.length).fill(null));
+    showToast(`Researching ${targetName} live online…`);
 
     try {
-      const res = await fetch('/api/prospects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: targetName,
-          domain: formDom.trim() || 'stripe.com',
-          ind: formInd.trim() || 'Technology',
-          contactName: formPer.trim() || 'Executive Contact',
-          contactRole: formRole.trim() || 'CTO',
-          contactLi: formLi.trim(),
-        }),
+      const created = await consumeStageStream('/api/prospects/stream', {
+        name: targetName,
+        domain: targetDomain,
+        ind: formInd.trim() || 'Technology',
+        contactName: formPer.trim() || 'Executive Contact',
+        contactRole: formRole.trim() || 'CTO',
+        contactLi: formLi.trim(),
       });
 
-      clearInterval(interval);
-      setProgStep(STAGES.length);
+      setProgStep(PIPELINE_STAGES.length);
+      setIsRunningLive(false);
 
-      if (res.ok) {
-        const created: Prospect = await res.json();
-        setProspects((prev) => [created, ...prev]);
+      if (created) {
+        setProspects((prev) =>
+          sortProspectsLatestFirst([created, ...prev.filter((p) => p.id !== created.id)])
+        );
         setActivePid(created.id);
+        if (created.agentTrace) {
+          setLiveStageTraces(created.agentTrace);
+        }
         setIntelTab('Overview');
         showToast(`Live intelligence retrieved for ${created.name}!`);
-        setView('intel');
+        setView((prevView) => (prevView === 'prog' ? 'prog' : 'intel'));
       } else {
         showToast('Live research encountered an error');
-        setView('new');
       }
     } catch {
-      clearInterval(interval);
+      setIsRunningLive(false);
       showToast('Network error during live research');
-      setView('new');
     }
   };
 
-  // LIVE REFRESH for an existing prospect
+  // LIVE REFRESH for an existing prospect (stays on current page and fetches latest live web & news updates)
   const refreshLiveResearch = async () => {
-    if (!curP || refreshing) return;
+    if (!curP || refreshing || isRunningLive) return;
     setRefreshing(true);
-    showToast(`Fetching live website & Google News for ${curP.name}…`);
+    setResearchingName(curP.name);
+    setResearchingDomain(curP.domain);
+    setProgStep(0);
+    setIsRunningLive(true);
+    setLiveStageTraces(Array(PIPELINE_STAGES.length).fill(null));
+    showToast(`Fetching latest live website & Google News updates for ${curP.name}…`);
     try {
-      const res = await fetch(`/api/prospects/${curP.id}/refresh`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const refreshed: Prospect = await res.json();
+      const refreshed = await consumeStageStream(`/api/prospects/${curP.id}/refresh-stream`);
+      setProgStep(PIPELINE_STAGES.length);
+      setIsRunningLive(false);
+      if (refreshed) {
         updateProspectInState(refreshed);
-        showToast(`Updated ${refreshed.name} with ${refreshed.signals.length} live signals!`);
+        if (refreshed.agentTrace) {
+          setLiveStageTraces(refreshed.agentTrace);
+        }
+        showToast(
+          `Refreshed ${refreshed.name} with ${refreshed.signals.length} latest live web & news signals!`
+        );
       }
     } finally {
       setRefreshing(false);
+      setIsRunningLive(false);
     }
   };
 
@@ -382,112 +487,266 @@ export default function ProspectIQApp() {
   ];
 
   const activeNavKey: ViewMode =
-    view === 'prog'
-      ? 'new'
-      : view === 'intel' || view === 'angles'
+    view === 'intel' || view === 'angles'
       ? 'pros'
       : view === 'draft'
       ? 'drafts'
       : view;
 
-  // Render Prospect Switcher Bar
+  const filteredProspects = sortProspectsLatestFirst(
+    prospects.filter((p) => {
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      const person = p.people[p.contactIdx] || p.people[0];
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.domain.toLowerCase().includes(q) ||
+        p.ind.toLowerCase().includes(q) ||
+        (person?.name || '').toLowerCase().includes(q) ||
+        (person?.role || '').toLowerCase().includes(q)
+      );
+    })
+  );
+
+  // Render Prospect Switcher Search Bar (replaces the old row of chips)
   const renderProspectSwitcher = () => (
-    <div className="p-sw">
+    <div
+      className="p-sw"
+      style={{
+        position: 'relative',
+        gap: 10,
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+      }}
+    >
       <span className="mut" style={{ fontSize: 12, fontWeight: 700 }}>
         ACTIVE PROSPECT:
       </span>
-      {prospects.map((p) => (
-        <button
-          key={p.id}
-          className={`chip ${curP?.id === p.id ? 'on' : ''}`}
-          onClick={() => {
-            setActivePid(p.id);
-            setStepIdx(0);
-            showToast(`Switched to ${p.name}`);
+      {curP && (
+        <span className="chip on" style={{ cursor: 'default' }}>
+          {curP.name}
+        </span>
+      )}
+      <div style={{ position: 'relative', minWidth: 250 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'var(--card)',
+            border: '1.5px solid var(--line)',
+            borderRadius: 999,
+            padding: '6px 14px',
+            gap: 8,
           }}
         >
-          {p.name}
-        </button>
-      ))}
+          <span className="mut" style={{ fontSize: 14, userSelect: 'none' }}>
+            ⌕
+          </span>
+          <input
+            value={searchQuery}
+            onFocus={() => setSearchOpen(true)}
+            onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setSearchOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && filteredProspects.length > 0) {
+                const target = filteredProspects[0];
+                setActivePid(target.id);
+                setStepIdx(0);
+                setSearchQuery('');
+                setSearchOpen(false);
+                showToast(`Switched to ${target.name}`);
+              }
+            }}
+            placeholder="Search to switch prospect…"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: '2px 0',
+              outline: 'none',
+              width: '100%',
+              fontSize: 13,
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                color: 'var(--mut)',
+                fontSize: 14,
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+              title="Clear search"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {searchOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              right: 0,
+              minWidth: 310,
+              background: 'var(--card)',
+              border: '1.5px solid var(--line)',
+              borderRadius: 20,
+              padding: 8,
+              zIndex: 50,
+              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35)',
+              maxHeight: 280,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            {filteredProspects.length === 0 ? (
+              <div className="mut" style={{ padding: '10px 12px', fontSize: 13 }}>
+                No matching prospects found.
+              </div>
+            ) : (
+              filteredProspects.map((p) => {
+                const person = p.people[p.contactIdx] || p.people[0];
+                const isCurrent = curP?.id === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={() => {
+                      setActivePid(p.id);
+                      setStepIdx(0);
+                      setSearchQuery('');
+                      setSearchOpen(false);
+                      showToast(`Switched to ${p.name}`);
+                    }}
+                    style={{
+                      all: 'unset',
+                      cursor: 'pointer',
+                      padding: '9px 12px',
+                      borderRadius: 14,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 8,
+                      background: isCurrent ? 'var(--bg)' : 'transparent',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name}</div>
+                      <div className="mut" style={{ fontSize: 12 }}>
+                        {person?.name} ({person?.role}) · {p.domain}
+                      </div>
+                    </div>
+                    <span
+                      className={`tag ${isCurrent ? 'ok' : ''}`}
+                      style={{ fontSize: 11 }}
+                    >
+                      {isCurrent ? 'Active ✓' : 'Select'}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 
-  // Render Prospect Table
-  const renderProspectTable = () => (
+  // Render Prospect Table (CRM Directory & Outreach Review)
+  const renderProspectTable = (
+    list: Prospect[] = prospects,
+    targetView: 'intel' | 'draft' = 'intel'
+  ) => (
     <div className="card tw">
       <table>
         <thead>
           <tr>
             <th>Company</th>
             <th>Primary Contact</th>
-            <th>Industry</th>
-            <th>Last researched</th>
-            <th>Research</th>
+            <th>Last Run</th>
             <th>Sequence Status</th>
-            <th>Action</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {prospects.map((p) => {
-            const person = p.people[p.contactIdx] || p.people[0];
-            const apprCnt = p.sequence.filter((s) => s.appr).length;
-            const stTag =
-              p.outreach === 'Approved' ? 'ok' : p.outreach === '—' ? '' : 'rev';
-            return (
-              <tr
-                key={p.id}
-                className="lk"
-                onClick={() => {
-                  setActivePid(p.id);
-                  setIntelTab('Overview');
-                  setView('intel');
-                }}
-              >
-                <td>
-                  <b>{p.name}</b>
-                  <br />
-                  <span className="mut" style={{ fontSize: 12 }}>
-                    {p.domain}
-                  </span>
-                </td>
-                <td>
-                  {person?.name}
-                  <br />
-                  <span className="mut" style={{ fontSize: 12 }}>
-                    {person?.role}
-                  </span>
-                </td>
-                <td>{p.ind}</td>
-                <td>{p.date}</td>
-                <td>
-                  <span className={`tag ${p.status === 'Completed' ? 'ok' : 'rev'}`}>
-                    {p.status}
-                  </span>
-                </td>
-                <td>
-                  <span className={`tag ${stTag}`}>
-                    {p.outreach === 'Approved'
-                      ? `Approved (${p.sequence.length}/${p.sequence.length})`
-                      : apprCnt
-                      ? `${apprCnt}/${p.sequence.length} Approved`
-                      : p.outreach}
-                  </span>
-                </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="btn sm sec"
-                    onClick={() => {
-                      setActivePid(p.id);
-                      setStepIdx(0);
+          {list.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="mut" style={{ textAlign: 'center', padding: 24 }}>
+                No prospects matching &ldquo;{searchQuery}&rdquo;.
+              </td>
+            </tr>
+          ) : (
+            list.map((p) => {
+              const person = p.people[p.contactIdx] || p.people[0];
+              const apprCnt = p.sequence.filter((s) => s.appr).length;
+              const stTag =
+                p.outreach === 'Approved' ? 'ok' : p.outreach === '—' ? '' : 'rev';
+              const firstPendingIdx = p.sequence.findIndex((s) => !s.appr);
+              return (
+                <tr
+                  key={p.id}
+                  className="lk"
+                  onClick={() => {
+                    setActivePid(p.id);
+                    if (targetView === 'draft') {
+                      setStepIdx(firstPendingIdx >= 0 ? firstPendingIdx : 0);
                       setView('draft');
-                    }}
-                  >
-                    Sequence →
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+                    } else {
+                      setIntelTab('Overview');
+                      setView('intel');
+                    }
+                  }}
+                >
+                  <td>
+                    <b>{p.name}</b>
+                    <br />
+                    <span className="mut" style={{ fontSize: 12 }}>
+                      {p.domain} · {p.ind}
+                    </span>
+                  </td>
+                  <td>
+                    {person?.name}
+                    <br />
+                    <span className="mut" style={{ fontSize: 12 }}>
+                      {person?.role}
+                    </span>
+                  </td>
+                  <td>{p.date}</td>
+                  <td>
+                    <span className={`tag ${stTag}`}>
+                      {p.outreach === 'Approved'
+                        ? `Approved (${p.sequence.length}/${p.sequence.length})`
+                        : apprCnt
+                        ? `${apprCnt}/${p.sequence.length} Approved`
+                        : p.outreach}
+                    </span>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="btn sm sec"
+                      onClick={() => {
+                        setActivePid(p.id);
+                        setStepIdx(firstPendingIdx >= 0 ? firstPendingIdx : 0);
+                        setView('draft');
+                      }}
+                    >
+                      Review →
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
       </table>
     </div>
@@ -510,18 +769,177 @@ export default function ProspectIQApp() {
               {label}
             </button>
           ))}
+          <button
+            className={`validator-btn ${activeNavKey === 'prog' ? 'on' : ''}`}
+            onClick={() => setView('prog')}
+          >
+            <i
+              className={`status-dot ${isRunningLive ? 'yellow' : 'green'}`}
+              style={{
+                background: activeNavKey === 'prog' ? '#10260f' : isRunningLive ? '#facc15' : '#4ade80',
+              }}
+            />
+            {isRunningLive
+              ? `Validating (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
+              : 'Live pipeline validator'}
+          </button>
         </nav>
 
         <main className="main-area">
           {/* DASHBOARD VIEW */}
           {view === 'dash' && (
             <>
-              <div className="row" style={{ alignItems: 'center', flex: 'none' }}>
-                <div style={{ flex: '3 1 300px' }}>
+              <div
+                className="row"
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flex: 'none',
+                  gap: 16,
+                }}
+              >
+                <div style={{ flex: '2 1 320px' }}>
                   <h1>Research smarter. Discover opportunities.</h1>
                   <div className="mut">
                     Live web scraping & Google News RSS enabled. Research any real company online or click an existing prospect below.
                   </div>
+                </div>
+
+                {/* Prospect Search & Quick-Select Bar */}
+                <div
+                  style={{
+                    flex: '1 1 280px',
+                    maxWidth: 380,
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: 'var(--card)',
+                      border: '1.5px solid var(--line)',
+                      borderRadius: 999,
+                      padding: '8px 16px',
+                      gap: 10,
+                    }}
+                  >
+                    <span className="mut" style={{ fontSize: 15, userSelect: 'none' }}>
+                      ⌕
+                    </span>
+                    <input
+                      value={searchQuery}
+                      onFocus={() => setSearchOpen(true)}
+                      onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setSearchOpen(true);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && filteredProspects.length > 0) {
+                          const target = filteredProspects[0];
+                          setActivePid(target.id);
+                          setIntelTab('Overview');
+                          setSearchOpen(false);
+                          setView('intel');
+                        }
+                      }}
+                      placeholder="Search or choose a prospect…"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '2px 0',
+                        outline: 'none',
+                        width: '100%',
+                        fontSize: 13.5,
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{
+                          all: 'unset',
+                          cursor: 'pointer',
+                          color: 'var(--mut)',
+                          fontSize: 15,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                        title="Clear search"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {searchOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 8px)',
+                        left: 0,
+                        right: 0,
+                        background: 'var(--card)',
+                        border: '1.5px solid var(--line)',
+                        borderRadius: 20,
+                        padding: 8,
+                        zIndex: 50,
+                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35)',
+                        maxHeight: 280,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                    >
+                      {filteredProspects.length === 0 ? (
+                        <div className="mut" style={{ padding: '10px 12px', fontSize: 13 }}>
+                          No matching prospects found.
+                        </div>
+                      ) : (
+                        filteredProspects.map((p) => {
+                          const person = p.people[p.contactIdx] || p.people[0];
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={() => {
+                                setActivePid(p.id);
+                                setIntelTab('Overview');
+                                setSearchOpen(false);
+                                setView('intel');
+                              }}
+                              style={{
+                                all: 'unset',
+                                cursor: 'pointer',
+                                padding: '9px 12px',
+                                borderRadius: 14,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 8,
+                                background:
+                                  curP?.id === p.id ? 'var(--bg)' : 'transparent',
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+                                  {p.name}
+                                </div>
+                                <div className="mut" style={{ fontSize: 12 }}>
+                                  {person?.name} ({person?.role}) · {p.domain}
+                                </div>
+                              </div>
+                              <span className="tag ok" style={{ fontSize: 11 }}>
+                                Open →
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -588,6 +1006,52 @@ export default function ProspectIQApp() {
                     </div>
                   </div>
                 </div>
+                <div
+                  className="card"
+                  onClick={() => {
+                    const latestP = prospects[0];
+                    if (latestP) {
+                      setActivePid(latestP.id);
+                      setIntelTab('Overview');
+                      setView('intel');
+                    }
+                  }}
+                  style={{
+                    cursor: prospects[0] ? 'pointer' : 'default',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="mut">Latest run</div>
+                    {prospects[0] && (
+                      <span className="tag ok" style={{ fontSize: 11 }}>
+                        {prospects[0].status}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 700,
+                        marginTop: 4,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                      title={prospects[0]?.name}
+                    >
+                      {prospects[0] ? prospects[0].name : 'No runs yet'}
+                    </div>
+                    <div className="mut" style={{ fontSize: 12, marginTop: 2 }}>
+                      {prospects[0]
+                        ? `${prospects[0].date} · ${prospects[0].signals.length} signals`
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
                 <div className="card green">
                   <div className="mut">Verified signals</div>
                   <div className="big">
@@ -607,10 +1071,31 @@ export default function ProspectIQApp() {
               </div>
 
               <div>
-                <h2 style={{ margin: '4px 0 10px' }}>
-                  All Researched Prospects (Click any row to open)
-                </h2>
-                {renderProspectTable()}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    margin: '8px 0 12px',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}
+                >
+                  <div>
+                    <h2 style={{ margin: 0 }}>Recent Prospects</h2>
+                    <span className="mut" style={{ fontSize: 13 }}>
+                      Recently researched companies and active sequences
+                    </span>
+                  </div>
+                  <button
+                    className="btn sm sec"
+                    onClick={() => setView('pros')}
+                    style={{ fontSize: 13 }}
+                  >
+                    View all {prospects.length} prospects →
+                  </button>
+                </div>
+                {renderProspectTable(filteredProspects.slice(0, 5))}
               </div>
             </>
           )}
@@ -682,40 +1167,279 @@ export default function ProspectIQApp() {
                   value={formLi}
                   onChange={(e) => setFormLi(e.target.value)}
                 />
-                <div style={{ marginTop: 18 }}>
-                  <button className="btn" onClick={startNewProspectResearch}>
-                    Run live online research →
+                <div style={{ marginTop: 18, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn"
+                    disabled={isRunningLive}
+                    onClick={startNewProspectResearch}
+                  >
+                    {isRunningLive
+                      ? `Researching live (Stage ${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
+                      : 'Run live online research →'}
                   </button>
+                  {isRunningLive && (
+                    <span className="mut" style={{ fontSize: 13 }}>
+                      {PIPELINE_STAGES[Math.min(progStep, PIPELINE_STAGES.length - 1)]?.title}
+                    </span>
+                  )}
                 </div>
               </div>
             </>
           )}
 
-          {/* PROGRESS VIEW */}
-          {view === 'prog' && (
-            <>
-              <h1>Researching {researchingName || curP?.name} online…</h1>
-              <div className="card" style={{ maxWidth: 560 }}>
-                <div className="bar">
-                  <i style={{ width: `${(progStep / STAGES.length) * 100}%` }} />
+          {/* LIVE RUN VIEW (SHOWING EACH STAGE AS IT EXECUTES) */}
+          {view === 'prog' && (() => {
+            const totalStages = PIPELINE_STAGES.length;
+            const activeTargetName = isRunningLive
+              ? researchingName || curP?.name || 'Prospect'
+              : curP?.name || researchingName || 'Prospect';
+            const activeTargetDomain = isRunningLive
+              ? researchingDomain || curP?.domain || ''
+              : curP?.domain || researchingDomain || '';
+
+            const displayTraces: Array<AgentTraceLog | null> = isRunningLive
+              ? liveStageTraces
+              : curP?.agentTrace && curP.agentTrace.length > 0
+              ? curP.agentTrace
+              : liveStageTraces;
+
+            const completedCount = isRunningLive
+              ? displayTraces.filter(Boolean).length
+              : displayTraces.filter(Boolean).length || totalStages;
+
+            const totalDurationMs = displayTraces.reduce(
+              (acc, t) => acc + (t?.durationMs || 0),
+              0
+            );
+
+            return (
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                  }}
+                >
+                  <button className="btn sm sec" onClick={() => setView('dash')}>
+                    ← Back to Dashboard
+                  </button>
+                  {!isRunningLive && renderProspectSwitcher()}
                 </div>
-                <div className="steps">
-                  {STAGES.map((s, k) => (
-                    <div
-                      key={s}
-                      className={`st ${k < progStep ? 'done' : k === progStep ? 'act' : ''}`}
-                    >
-                      <span className="dot">{k < progStep ? '✓' : k + 1}</span>
-                      {s}
+
+                <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '3 1 320px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <h1>
+                        {isRunningLive
+                          ? `Live pipeline validator: ${activeTargetName} (Running…)`
+                          : `Live pipeline validator: ${activeTargetName}`}
+                      </h1>
+                      <span className={`tag ${isRunningLive ? 'rev' : 'ok'}`}>
+                        {isRunningLive
+                          ? `Running Stage ${Math.min(progStep + 1, totalStages)} of ${totalStages}…`
+                          : `Completed (${completedCount}/${totalStages} Stages · ${(
+                              totalDurationMs / 1000
+                            ).toFixed(2)}s)`}
+                      </span>
                     </div>
-                  ))}
+                    <div className="mut" style={{ marginTop: 4 }}>
+                      Target: <b>{activeTargetDomain}</b> · Real-time stage execution with live website DOM scraping, Google News RSS, OKF/ICM attribution & sequence synthesis.
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, flex: '0 0 auto', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn sec"
+                      disabled={isRunningLive}
+                      onClick={refreshLiveResearch}
+                    >
+                      {isRunningLive ? 'Executing pipeline…' : '▶ Re-run live pipeline'}
+                    </button>
+                    <button
+                      className="btn sec"
+                      disabled={isRunningLive}
+                      onClick={() => setView('new')}
+                    >
+                      + New prospect run
+                    </button>
+                    {!isRunningLive && curP && (
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          setIntelTab('Overview');
+                          setView('intel');
+                        }}
+                      >
+                        Inspect intelligence →
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="mut" style={{ marginTop: 14 }}>
-                  Fetching live HTML metadata and real-time Google News RSS articles…
+
+                {/* Progress Bar */}
+                <div className="card" style={{ padding: '16px 22px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <span>
+                      {isRunningLive
+                        ? `Stage ${Math.min(progStep + 1, totalStages)}: ${
+                            PIPELINE_STAGES[Math.min(progStep, totalStages - 1)]?.title
+                          }`
+                        : `All ${totalStages} pipeline stages executed successfully`}
+                    </span>
+                    <span>{Math.round((completedCount / totalStages) * 100)}%</span>
+                  </div>
+                  <div className="bar">
+                    <i
+                      style={{
+                        width: `${Math.round((completedCount / totalStages) * 100)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+
+                {/* Stage-by-Stage Live Execution List */}
+                <div className="stage-list">
+                  {PIPELINE_STAGES.map((stageMeta, idx) => {
+                    const trace = displayTraces[idx];
+                    const isDone = Boolean(trace) || (!isRunningLive && idx < completedCount);
+                    const isCurrent = isRunningLive && !isDone && idx === progStep;
+                    const stateClass = isDone ? 'done' : isCurrent ? 'running' : 'queued';
+
+                    return (
+                      <div key={stageMeta.title} className={`stage-card ${stateClass}`}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                            <span className="stage-dot">
+                              {isDone ? '✓' : idx + 1}
+                            </span>
+                            <div>
+                              <h3 style={{ fontSize: 16 }}>
+                                {trace?.agentName || stageMeta.title}
+                              </h3>
+                              <div className="mut" style={{ fontSize: 12 }}>
+                                {trace?.role || stageMeta.role}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 8,
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            {trace?.outputArtifact && (
+                              <span className="tag">{trace.outputArtifact}</span>
+                            )}
+                            {trace?.durationMs && (
+                              <span className="mut" style={{ fontSize: 12, fontWeight: 700 }}>
+                                {trace.durationMs}ms
+                              </span>
+                            )}
+                            <span
+                              className={`tag ${
+                                isDone ? 'ok' : isCurrent ? 'rev' : ''
+                              }`}
+                            >
+                              {isDone
+                                ? 'Completed ✓'
+                                : isCurrent
+                                ? 'Executing live…'
+                                : 'Queued'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Stage Output Summary & Live Intermediate Artifacts */}
+                        {isCurrent && (
+                          <div className="mut" style={{ marginTop: 10, paddingLeft: 44 }}>
+                            Running stage on backend — streaming live output…
+                          </div>
+                        )}
+
+                        {isDone && trace && (
+                          <div style={{ paddingLeft: 44, marginTop: 8 }}>
+                            <div style={{ fontWeight: 600 }}>{trace.summary}</div>
+                            {trace.details && trace.details.length > 0 && (
+                              <div className="stage-details">
+                                {trace.details.map((line, dIdx) => (
+                                  <div key={dIdx} style={{ display: 'flex', gap: 8 }}>
+                                    <span style={{ color: 'var(--pd)', fontWeight: 700 }}>•</span>
+                                    <span>{line}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bottom Action Bar once Completed */}
+                {!isRunningLive && curP && (
+                  <div
+                    className="card dark row"
+                    style={{ alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <div>
+                      <b>Run outputs ready for {curP.name}:</b>{' '}
+                      <span className="mut">
+                        {curP.signals.length} verified signals · {curP.people.length} decision-makers ·{' '}
+                        {curP.angles.length} angles · {curP.sequence.length}-step outreach sequence
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flex: '0 0 auto', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn sec"
+                        onClick={() => {
+                          setIntelTab('Overview');
+                          setView('intel');
+                        }}
+                      >
+                        Inspect intelligence ({curP.signals.length} signals)
+                      </button>
+                      <button className="btn sec" onClick={() => setView('angles')}>
+                        Outreach angles ({curP.angles.length})
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          setStepIdx(0);
+                          setView('draft');
+                        }}
+                      >
+                        Open 4-step sequence →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* PROSPECT INTELLIGENCE VIEW */}
           {view === 'intel' && curP && (
@@ -745,10 +1469,12 @@ export default function ProspectIQApp() {
                 <div style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
                   <button
                     className="btn sec"
-                    disabled={refreshing}
+                    disabled={refreshing || isRunningLive}
                     onClick={refreshLiveResearch}
                   >
-                    {refreshing ? 'Fetching live data…' : '↻ Refresh live online'}
+                    {refreshing
+                      ? `Fetching live updates (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
+                      : '↻ Refresh live online'}
                   </button>
                   <button className="btn" onClick={() => setView('angles')}>
                     Outreach angles →
@@ -1198,7 +1924,7 @@ export default function ProspectIQApp() {
                     >
                       <div className="seq-top">
                         <span className="seq-day">
-                          STEP {st.step} · {st.day}
+                          STEP {st.step}
                         </span>
                         <span className={`tag ${st.appr ? 'ok' : 'rev'}`}>
                           {st.appr ? 'Approved' : 'Draft'}
@@ -1223,7 +1949,7 @@ export default function ProspectIQApp() {
                     onClick={addFollowUpStep}
                   >
                     <div className="seq-title">+ Add step</div>
-                    <div className="seq-sub">Day {seq.length * 3 + 4} touchpoint</div>
+                    <div className="seq-sub">Follow-up touchpoint</div>
                   </button>
                 </div>
 
@@ -1239,7 +1965,7 @@ export default function ProspectIQApp() {
                     >
                       <div>
                         <h2>
-                          Step {curStep.step}: {curStep.label} ({curStep.day})
+                          Step {curStep.step}: {curStep.label}
                         </h2>
                         <div className="mut" style={{ fontSize: 12 }}>
                           Goal: {curStep.goal}
@@ -1443,163 +2169,284 @@ export default function ProspectIQApp() {
             );
           })()}
 
-          {/* PROSPECTS DIRECTORY VIEW */}
+          {/* PROSPECTS DIRECTORY VIEW (CARDS) */}
           {view === 'pros' && (
             <>
-              <div className="row" style={{ alignItems: 'center', flex: 'none' }}>
-                <div style={{ flex: 1 }}>
+              <div
+                className="row"
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flex: 'none',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ flex: '1 1 300px' }}>
                   <h1>Prospects directory</h1>
                   <div className="mut">
-                    All {prospects.length} companies are saved to disk (`backend/storage/db.json`) and have full interactive sequences.
+                    {searchQuery
+                      ? `Showing ${filteredProspects.length} of ${prospects.length} companies matching "${searchQuery}"`
+                      : `All ${prospects.length} companies saved to disk with full interactive profiles and sequences.`}
                   </div>
                 </div>
-                <button
-                  className="btn"
-                  style={{ flex: '0 0 auto' }}
-                  onClick={() => setView('new')}
-                >
-                  + Research live prospect
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: 'var(--card)',
+                      border: '1.5px solid var(--line)',
+                      borderRadius: 999,
+                      padding: '7px 14px',
+                      gap: 8,
+                      minWidth: 240,
+                    }}
+                  >
+                    <span className="mut" style={{ fontSize: 14, userSelect: 'none' }}>
+                      ⌕
+                    </span>
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Filter directory…"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        width: '100%',
+                        fontSize: 13,
+                        color: 'inherit',
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{
+                          all: 'unset',
+                          cursor: 'pointer',
+                          color: 'var(--mut)',
+                          fontSize: 15,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                        title="Clear filter"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="btn"
+                    style={{ flex: '0 0 auto' }}
+                    onClick={() => setView('new')}
+                  >
+                    + Research live prospect
+                  </button>
+                </div>
               </div>
-              {renderProspectTable()}
-            </>
-          )}
 
-          {/* OUTREACH DRAFTS VIEW */}
-          {view === 'drafts' && (
-            <>
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  gap: 16,
                   alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 12,
+                  fontSize: 13,
+                  margin: '4px 0 16px',
                 }}
               >
-                <div>
-                  <h1>Outreach sequences & drafts</h1>
-                  <div className="mut">
-                    Click any company card below to open its sequence in the builder.
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <i className="status-dot green" /> Completed
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <i className="status-dot yellow" /> Pending
-                  </span>
-                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <i className="status-dot green" /> Completed
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <i className="status-dot yellow" /> Pending
+                </span>
               </div>
 
               <div className="draft-cards-grid">
-                {prospects.map((p) => {
-                  const person = p.people[p.contactIdx] || p.people[0];
-                  const apprCnt = p.sequence.filter((s) => s.appr).length;
-                  const totalSteps = p.sequence.length;
-                  const allApproved = apprCnt === totalSteps && totalSteps > 0;
-                  const pct = Math.round((apprCnt / Math.max(totalSteps, 1)) * 100);
+                {filteredProspects.length === 0 ? (
+                  <div
+                    className="card"
+                    style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 32 }}
+                  >
+                    <span className="mut">No prospects matching &ldquo;{searchQuery}&rdquo;.</span>
+                  </div>
+                ) : (
+                  filteredProspects.map((p) => {
+                    const person = p.people[p.contactIdx] || p.people[0];
+                    const apprCnt = p.sequence.filter((s) => s.appr).length;
+                    const totalSteps = p.sequence.length;
+                    const allApproved = apprCnt === totalSteps && totalSteps > 0;
+                    const pct = Math.round((apprCnt / Math.max(totalSteps, 1)) * 100);
+                    const firstPendingIdx = p.sequence.findIndex((s) => !s.appr);
 
-                  const firstPendingIdx = p.sequence.findIndex((s) => !s.appr);
-                  const activeIdx = firstPendingIdx >= 0 ? firstPendingIdx : Math.max(totalSteps - 1, 0);
-                  const activeStep = p.sequence[activeIdx];
-                  const lastStep = p.sequence[Math.max(totalSteps - 1, 0)];
-
-                  const curDayMatch = activeStep?.day?.match(/\d+/);
-                  const lastDayMatch = lastStep?.day?.match(/\d+/);
-                  const dayLabel =
-                    curDayMatch && lastDayMatch
-                      ? `Day ${curDayMatch[0]} of ${lastDayMatch[0]}`
-                      : activeStep?.day || 'Day 1';
-
-                  return (
-                    <div
-                      key={p.id}
-                      className="card draft-card"
-                      onClick={() => {
-                        setActivePid(p.id);
-                        setStepIdx(firstPendingIdx >= 0 ? firstPendingIdx : 0);
-                        setView('draft');
-                      }}
-                    >
-                      <div className="draft-card-head">
-                        <div>
-                          <h2 style={{ fontSize: 22, marginBottom: 6 }}>{p.name}</h2>
-                          <div className="mut" style={{ fontSize: 14 }}>
-                            {person?.name} • {person?.role}
+                    return (
+                      <div
+                        key={p.id}
+                        className={`card draft-card ${allApproved ? 'green' : 'lav'}`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setActivePid(p.id);
+                          setIntelTab('Overview');
+                          setView('intel');
+                        }}
+                      >
+                        <div className="draft-card-head">
+                          <div>
+                            <h2 style={{ fontSize: 22, marginBottom: 6 }}>{p.name}</h2>
+                            <div className="mut" style={{ fontSize: 14 }}>
+                              {person?.name} • {person?.role}
+                            </div>
                           </div>
-                        </div>
-                        <span className={`draft-badge ${allApproved ? 'ok' : ''}`}>
-                          <i className="badge-dot" />
-                          {apprCnt}/{totalSteps} Approved
-                        </span>
-                      </div>
-
-                      <div className="draft-card-ind">{p.ind}</div>
-
-                      <div className="draft-card-divider" />
-
-                      <div className="draft-card-foot">
-                        <div className="draft-dots-row">
-                          {p.sequence.map((st, idx) => {
-                            const dotClass = st.appr
-                              ? 'green'
-                              : idx === firstPendingIdx
-                              ? 'yellow'
-                              : 'upcoming';
-                            return (
-                              <div
-                                key={st.step}
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActivePid(p.id);
-                                    setStepIdx(idx);
-                                    setView('draft');
-                                  }}
-                                  title={`Step ${st.step}: ${st.label} (${st.appr ? 'Approved' : 'Pending review'})`}
-                                  style={{
-                                    all: 'unset',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                  }}
-                                >
-                                  <i className={`status-dot ${dotClass}`} />
-                                </button>
-                                {idx < totalSteps - 1 && (
-                                  <span
-                                    className={`dot-line ${
-                                      st.appr && p.sequence[idx + 1]?.appr ? 'green' : ''
-                                    }`}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                          <span className="mut" style={{ fontSize: 13, marginLeft: 8 }}>
-                            {dayLabel}
+                          <span className={`draft-badge ${allApproved ? 'ok' : ''}`}>
+                            <i className="badge-dot" />
+                            {apprCnt}/{totalSteps} Phase
                           </span>
                         </div>
 
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: allApproved ? '#4ade80' : '#facc15',
-                          }}
-                        >
-                          {pct}%
-                        </span>
+                        <div className="draft-card-ind">{p.ind}</div>
+
+                        <div className="draft-card-divider" />
+
+                        <div className="draft-card-foot">
+                          <div className="draft-dots-row">
+                            {p.sequence.map((st, idx) => {
+                              const dotClass = st.appr
+                                ? 'green'
+                                : idx === firstPendingIdx
+                                ? 'yellow'
+                                : 'upcoming';
+                              return (
+                                <div
+                                  key={st.step}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActivePid(p.id);
+                                      setStepIdx(idx);
+                                      setView('draft');
+                                    }}
+                                    title={`Step ${st.step}: ${st.label} (${
+                                      st.appr ? 'Approved' : 'Pending review'
+                                    })`}
+                                    style={{
+                                      all: 'unset',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    <i className={`status-dot ${dotClass}`} />
+                                  </button>
+                                  {idx < totalSteps - 1 && (
+                                    <span
+                                      className={`dot-line ${
+                                        st.appr && p.sequence[idx + 1]?.appr ? 'green' : ''
+                                      }`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              fontSize: 14,
+                              color: allApproved ? '#10260f' : '#1c1640',
+                            }}
+                          >
+                            {pct}%
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
+            </>
+          )}
+
+          {/* OUTREACH DRAFTS VIEW (LIST) */}
+          {view === 'drafts' && (
+            <>
+              <div
+                className="row"
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flex: 'none',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ flex: '1 1 300px' }}>
+                  <h1>Outreach sequences & drafts</h1>
+                  <div className="mut">
+                    {searchQuery
+                      ? `Showing ${filteredProspects.length} of ${prospects.length} sequences matching "${searchQuery}"`
+                      : `Click any row below to open and edit its sequence in the builder.`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: 'var(--card)',
+                      border: '1.5px solid var(--line)',
+                      borderRadius: 999,
+                      padding: '7px 14px',
+                      gap: 8,
+                      minWidth: 240,
+                    }}
+                  >
+                    <span className="mut" style={{ fontSize: 14, userSelect: 'none' }}>
+                      ⌕
+                    </span>
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Filter sequences…"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        width: '100%',
+                        fontSize: 13,
+                        color: 'inherit',
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{
+                          all: 'unset',
+                          cursor: 'pointer',
+                          color: 'var(--mut)',
+                          fontSize: 15,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                        title="Clear filter"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {renderProspectTable(filteredProspects, 'draft')}
             </>
           )}
 
