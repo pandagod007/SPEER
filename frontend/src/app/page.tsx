@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useUser, UserButton, SignIn } from '@clerk/nextjs';
 import { Prospect, CompanySettings, Tone, Length, Channel, AgentTraceLog } from '@/types';
 
 type ViewMode = 'dash' | 'new' | 'prog' | 'intel' | 'angles' | 'draft' | 'pros' | 'drafts' | 'set';
@@ -51,6 +52,12 @@ function sortProspectsLatestFirst(list: Prospect[]): Prospect[] {
 }
 
 export default function ProspectIQApp() {
+  const { user, isLoaded, isSignedIn } = useUser();
+  const hasClerkKeys = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+    'pk_test_Y2FyaW5nLWNpY2FkYS05NjEzLmNsZXJrLmFjY291bnRzLmRldiQ'
+  );
+
   const [view, setView] = useState<ViewMode>('dash');
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [activePid, setActivePid] = useState<string>('acme');
@@ -58,6 +65,17 @@ export default function ProspectIQApp() {
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const authFetch = useCallback(
+    (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers || {});
+      if (user?.id) {
+        headers.set('x-user-id', user.id);
+      }
+      return fetch(url, { ...init, headers });
+    },
+    [user?.id]
+  );
 
   // Sub-view states
   const [intelTab, setIntelTab] = useState<IntelTab>('Overview');
@@ -102,8 +120,8 @@ export default function ProspectIQApp() {
   const fetchAll = useCallback(async () => {
     try {
       const [pRes, sRes] = await Promise.all([
-        fetch('/api/prospects'),
-        fetch('/api/settings'),
+        authFetch('/api/prospects'),
+        authFetch('/api/settings'),
       ]);
       if (pRes.ok) {
         const data = await pRes.json();
@@ -119,11 +137,13 @@ export default function ProspectIQApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    if (!hasClerkKeys || isLoaded) {
+      fetchAll();
+    }
+  }, [hasClerkKeys, isLoaded, user?.id, fetchAll]);
 
   const curP = prospects.find((p) => p.id === activePid) || prospects[0];
 
@@ -140,7 +160,7 @@ export default function ProspectIQApp() {
       ? curP.sel.filter((x) => x !== sigId)
       : [...curP.sel, sigId];
 
-    const res = await fetch(`/api/prospects/${curP.id}`, {
+    const res = await authFetch(`/api/prospects/${curP.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sel: nextSel }),
@@ -155,7 +175,7 @@ export default function ProspectIQApp() {
     if (!curP) return;
     const body: Record<string, unknown> = { ang };
     if (customText !== undefined) body.custom = customText;
-    const res = await fetch(`/api/prospects/${curP.id}`, {
+    const res = await authFetch(`/api/prospects/${curP.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -171,7 +191,7 @@ export default function ProspectIQApp() {
     setGeneratingSeq(true);
     showToast(`Writing natural 4-step sequence with Gemini AI…`);
     try {
-      const res = await fetch(`/api/prospects/${curP.id}`, {
+      const res = await authFetch(`/api/prospects/${curP.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ regenerateSequence: true, tone, len }),
@@ -189,7 +209,7 @@ export default function ProspectIQApp() {
   // Select primary contact
   const selectPrimaryContact = async (contactIdx: number) => {
     if (!curP) return;
-    const res = await fetch(`/api/prospects/${curP.id}`, {
+    const res = await authFetch(`/api/prospects/${curP.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contactIdx, regenerateSequence: true, tone, len }),
@@ -211,7 +231,7 @@ export default function ProspectIQApp() {
       .split('·')
       .map((s) => s.trim());
 
-    const res = await fetch(`/api/prospects/${curP.id}/people`, {
+    const res = await authFetch(`/api/prospects/${curP.id}/people`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -245,7 +265,7 @@ export default function ProspectIQApp() {
     if (!curP) return;
     if (payload.regenerate) setRegeneratingStep(true);
     try {
-      const res = await fetch(`/api/prospects/${curP.id}/sequence/${idx}`, {
+      const res = await authFetch(`/api/prospects/${curP.id}/sequence/${idx}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -261,7 +281,7 @@ export default function ProspectIQApp() {
   // Approve all steps
   const approveEntireSequence = async () => {
     if (!curP) return;
-    const res = await fetch(`/api/prospects/${curP.id}/sequence/approve-all`, {
+    const res = await authFetch(`/api/prospects/${curP.id}/sequence/approve-all`, {
       method: 'POST',
     });
     if (res.ok) {
@@ -274,7 +294,7 @@ export default function ProspectIQApp() {
   // Add follow-up step
   const addFollowUpStep = async () => {
     if (!curP) return;
-    const res = await fetch(`/api/prospects/${curP.id}/sequence/add-step`, {
+    const res = await authFetch(`/api/prospects/${curP.id}/sequence/add-step`, {
       method: 'POST',
     });
     if (res.ok) {
@@ -290,7 +310,7 @@ export default function ProspectIQApp() {
     url: string,
     bodyPayload?: Record<string, unknown>
   ): Promise<Prospect | null> => {
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method: 'POST',
       headers: bodyPayload ? { 'Content-Type': 'application/json' } : undefined,
       body: bodyPayload ? JSON.stringify(bodyPayload) : undefined,
@@ -418,7 +438,7 @@ export default function ProspectIQApp() {
     setLoadingMoreSignals(true);
     showToast(`Discovering more live signals for ${curP.name}…`);
     try {
-      const res = await fetch(`/api/prospects/${curP.id}/signals/more`, {
+      const res = await authFetch(`/api/prospects/${curP.id}/signals/more`, {
         method: 'POST',
       });
       if (res.ok) {
@@ -443,7 +463,7 @@ export default function ProspectIQApp() {
     setImportingSite(true);
     showToast(`Scraping live website ${settings.domain}…`);
     try {
-      const res = await fetch('/api/settings/import-website', {
+      const res = await authFetch('/api/settings/import-website', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain: settings.domain }),
@@ -752,13 +772,107 @@ export default function ProspectIQApp() {
     </div>
   );
 
+  if (hasClerkKeys && isLoaded && !isSignedIn) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 16px',
+          background: 'var(--bg)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 440,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              fontSize: 32,
+              fontWeight: 700,
+              fontFamily: 'DM Sans',
+              color: 'var(--ink)',
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="speer logo"
+              style={{ width: 44, height: 44, borderRadius: 12 }}
+            />
+            speer
+          </div>
+          <div
+            style={{
+              textAlign: 'center',
+              color: 'var(--mut)',
+              fontSize: 14,
+              lineHeight: 1.5,
+              marginTop: -6,
+            }}
+          >
+            AI-Powered B2B Prospect Intelligence & Hyper-Personalized Sequences
+          </div>
+
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              marginTop: 10,
+            }}
+          >
+            <SignIn routing="hash" />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 12,
+              color: 'var(--mut)',
+              marginTop: 12,
+            }}
+          >
+            <span>🔒 Isolated & Private Workspace</span>
+            <span>·</span>
+            <span>Your research is confidential</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="app">
         <nav className="side-nav">
-          <div className="logo">
-            <img src="/logo.png" alt="speer logo" />
-            speer
+          <div
+            className="logo"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingRight: 4,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img src="/logo.png" alt="speer logo" />
+              speer
+            </div>
+            {hasClerkKeys && <UserButton afterSignOutUrl="/" />}
           </div>
           {navItems.map(([key, label]) => (
             <button
@@ -783,6 +897,36 @@ export default function ProspectIQApp() {
               ? `Validating (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
               : 'Live pipeline validator'}
           </button>
+
+          {hasClerkKeys && user && (
+            <div
+              style={{
+                marginTop: 'auto',
+                padding: '12px 10px',
+                borderRadius: 16,
+                background: 'var(--bg)',
+                fontSize: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
+              <div style={{ fontWeight: 700, color: 'var(--ink)' }}>
+                {user.fullName || user.primaryEmailAddress?.emailAddress?.split('@')[0]}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--mut)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {user.primaryEmailAddress?.emailAddress}
+              </div>
+            </div>
+          )}
         </nav>
 
         <main className="main-area">
@@ -2498,7 +2642,7 @@ export default function ProspectIQApp() {
                     className="btn"
                     style={{ marginTop: 14 }}
                     onClick={async () => {
-                      const res = await fetch('/api/settings', {
+                      const res = await authFetch('/api/settings', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(settings),
@@ -2566,7 +2710,7 @@ export default function ProspectIQApp() {
                     className="btn"
                     style={{ marginTop: 22 }}
                     onClick={async () => {
-                      const res = await fetch('/api/settings', {
+                      const res = await authFetch('/api/settings', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(settings),

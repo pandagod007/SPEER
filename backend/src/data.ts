@@ -2,18 +2,24 @@ import { Prospect, CompanySettings } from './types';
 import { buildFullSequence } from './generator';
 import { enrichProspectWithMultiAgentOKFICM } from './okf_icm';
 
-export let SETTINGS: CompanySettings = {
-  companyName: 'Algoworks',
-  domain: 'algoworks.com',
+export const DEFAULT_SETTINGS: CompanySettings = {
+  companyName: 'Acme Technologies',
+  domain: 'acme.ai',
   category: 'Technology services',
-  description: 'AI engineering and enterprise AI solutions for manufacturing, logistics, and high-growth enterprises.',
-  senderName: 'GODY',
+  description: 'AI engineering and enterprise solutions for manufacturing, logistics, and modern high-growth enterprises.',
+  senderName: 'Sales Lead',
   offerings: [
     { id: 'off_1', name: 'Enterprise AI platform', desc: 'End-to-end model deployment, governance, and RAG pipelines.' },
     { id: 'off_2', name: 'Workflow automation', desc: 'AI-powered orchestration for cross-system operational processes.' },
     { id: 'off_3', name: 'Data pipeline toolkit', desc: 'Real-time streaming and ERP/IoT data unification across sites.' },
   ],
 };
+
+export let SETTINGS: CompanySettings = { ...DEFAULT_SETTINGS };
+
+export function getDefaultSettings(): CompanySettings {
+  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+}
 
 const rawProspects: Array<Omit<Prospect, 'sequence'>> = [
   {
@@ -402,5 +408,9 @@ for (const raw of rawProspects) {
     sequence: seq,
   };
   PROSPECTS_DB[raw.id] = enrichProspectWithMultiAgentOKFICM(full, SETTINGS);
+}
+
+export function getDefaultProspects(): Record<string, Prospect> {
+  return JSON.parse(JSON.stringify(PROSPECTS_DB));
 }
 

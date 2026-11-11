@@ -3,14 +3,13 @@ import os from 'os';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import { PROSPECTS_DB, SETTINGS } from './data';
 import {
   buildFullSequence,
   buildStepContent,
   generateFullSequenceWithAI,
   generateSingleStepWithAI,
 } from './generator';
-import { loadPersistedState, savePersistedState } from './storage';
+import { getUserData, saveUserData, loadPersistedState } from './storage';
 import {
   runLiveProspectResearch,
   scrapeOfferingsFromSellerDomain,
@@ -31,6 +30,20 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json());
+
+function getUserCtx(req: express.Request) {
+  const userId =
+    (req.headers['x-user-id'] as string) ||
+    (req.query.userId as string) ||
+    'default';
+  const data = getUserData(userId);
+  return {
+    userId,
+    prospects: data.prospects,
+    settings: data.settings,
+    save: () => saveUserData(userId, data.prospects, data.settings),
+  };
+}
 
 function updateOutreachStatus(p: Prospect) {
   const apprCount = p.sequence.filter((s) => s.appr).length;
@@ -69,8 +82,9 @@ function getProspectTimestamp(p: Prospect): number {
 }
 
 // Get all prospects + dashboard metrics
-app.get('/api/prospects', (_req, res) => {
-  const list = Object.values(PROSPECTS_DB).sort(
+app.get('/api/prospects', (req, res) => {
+  const { prospects } = getUserCtx(req);
+  const list = Object.values(prospects).sort(
     (a, b) => getProspectTimestamp(b) - getProspectTimestamp(a)
   );
   const companiesCount = list.length;
@@ -98,14 +112,16 @@ app.get('/api/prospects', (_req, res) => {
 
 // Get single prospect by ID
 app.get('/api/prospects/:id', (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
   res.json(p);
 });
 
-// LIVE RESEARCH: Create & research a new prospect online (scrapes website + fetches Google News RSS + Gemini synthesis)
+// LIVE RESEARCH: Create & research a new prospect online
 app.post('/api/prospects', async (req, res) => {
   try {
+    const { prospects, settings, save } = getUserCtx(req);
     const {
       name = 'Stripe',
       domain = 'stripe.com',
@@ -124,11 +140,11 @@ app.post('/api/prospects', async (req, res) => {
       contactName,
       contactRole,
       contactLi,
-      settings: SETTINGS,
+      settings,
     });
 
-    PROSPECTS_DB[fullProspect.id] = fullProspect;
-    savePersistedState();
+    prospects[fullProspect.id] = fullProspect;
+    save();
 
     res.status(201).json(fullProspect);
   } catch (err) {
@@ -150,6 +166,7 @@ app.post('/api/prospects/stream', async (req, res) => {
   };
 
   try {
+    const { prospects, settings, save } = getUserCtx(req);
     const {
       name = 'Stripe',
       domain = 'stripe.com',
@@ -169,15 +186,15 @@ app.post('/api/prospects/stream', async (req, res) => {
         contactName,
         contactRole,
         contactLi,
-        settings: SETTINGS,
+        settings,
       },
       (ev) => {
         sendEvent(ev as unknown as Record<string, unknown>);
       }
     );
 
-    PROSPECTS_DB[fullProspect.id] = fullProspect;
-    savePersistedState();
+    prospects[fullProspect.id] = fullProspect;
+    save();
 
     sendEvent({ type: 'complete', prospect: fullProspect });
     res.end();
@@ -191,7 +208,8 @@ app.post('/api/prospects/stream', async (req, res) => {
 // LIVE REFRESH: Re-run live online research for an existing prospect
 app.post('/api/prospects/:id/refresh', async (req, res) => {
   try {
-    const existing = PROSPECTS_DB[req.params.id];
+    const { prospects, settings, save } = getUserCtx(req);
+    const existing = prospects[req.params.id];
     if (!existing) return res.status(404).json({ error: 'Prospect not found' });
 
     const primaryPerson = existing.people[existing.contactIdx] || existing.people[0];
@@ -204,7 +222,7 @@ app.post('/api/prospects/:id/refresh', async (req, res) => {
       contactName: primaryPerson?.name || 'Executive Contact',
       contactRole: primaryPerson?.role || 'CTO',
       contactLi: primaryPerson?.li,
-      settings: SETTINGS,
+      settings,
     });
 
     if (existing.people.length > refreshed.people.length) {
@@ -216,8 +234,8 @@ app.post('/api/prospects/:id/refresh', async (req, res) => {
       });
     }
 
-    PROSPECTS_DB[existing.id] = refreshed;
-    savePersistedState();
+    prospects[existing.id] = refreshed;
+    save();
     res.json(refreshed);
   } catch (err) {
     console.error('Error refreshing prospect:', err);
@@ -227,7 +245,8 @@ app.post('/api/prospects/:id/refresh', async (req, res) => {
 
 // LIVE STREAMING REFRESH: Re-run live online research with real-time stage streaming
 app.post('/api/prospects/:id/refresh-stream', async (req, res) => {
-  const existing = PROSPECTS_DB[req.params.id];
+  const { prospects, settings, save } = getUserCtx(req);
+  const existing = prospects[req.params.id];
   if (!existing) return res.status(404).json({ error: 'Prospect not found' });
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -252,7 +271,7 @@ app.post('/api/prospects/:id/refresh-stream', async (req, res) => {
         contactName: primaryPerson?.name || 'Executive Contact',
         contactRole: primaryPerson?.role || 'CTO',
         contactLi: primaryPerson?.li,
-        settings: SETTINGS,
+        settings,
       },
       (ev) => {
         sendEvent(ev as unknown as Record<string, unknown>);
@@ -268,8 +287,8 @@ app.post('/api/prospects/:id/refresh-stream', async (req, res) => {
       });
     }
 
-    PROSPECTS_DB[existing.id] = refreshed;
-    savePersistedState();
+    prospects[existing.id] = refreshed;
+    save();
 
     sendEvent({ type: 'complete', prospect: refreshed });
     res.end();
@@ -283,10 +302,11 @@ app.post('/api/prospects/:id/refresh-stream', async (req, res) => {
 // LIVE DISCOVER MORE SIGNALS: Fetch & synthesize +3 new unique signals for a prospect
 app.post('/api/prospects/:id/signals/more', async (req, res) => {
   try {
-    const p = PROSPECTS_DB[req.params.id];
+    const { prospects, settings, save } = getUserCtx(req);
+    const p = prospects[req.params.id];
     if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
-    const newSignals = await discoverMoreSignalsForProspect(p, SETTINGS, 3);
+    const newSignals = await discoverMoreSignalsForProspect(p, settings, 3);
     if (newSignals.length > 0) {
       p.signals.push(...newSignals);
       // Auto-select newly discovered High-relevance signals
@@ -295,8 +315,8 @@ app.post('/api/prospects/:id/signals/more', async (req, res) => {
           p.sel.push(s.id);
         }
       });
-      enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
-      savePersistedState();
+      enrichProspectWithMultiAgentOKFICM(p, settings);
+      save();
     }
 
     res.json({
@@ -311,7 +331,8 @@ app.post('/api/prospects/:id/signals/more', async (req, res) => {
 
 // Update selected signals, angle, or primary contact
 app.patch('/api/prospects/:id', async (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, settings, save } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
   const { sel, ang, custom, contactIdx, regenerateSequence, tone, len } = req.body;
@@ -325,22 +346,23 @@ app.patch('/api/prospects/:id', async (req, res) => {
       p,
       (tone as Tone) || 'Warm & Catchy',
       (len as Length) || 'Standard',
-      SETTINGS
+      settings
     );
     updateOutreachStatus(p);
   }
 
-  enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
-  savePersistedState();
+  enrichProspectWithMultiAgentOKFICM(p, settings);
+  save();
   res.json(p);
 });
 
 // Export standalone OKF JSON-LD + ICM bundle for a prospect
 app.get('/api/prospects/:id/okf', (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, settings } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
   if (!p.okf || !p.icm) {
-    enrichProspectWithMultiAgentOKFICM(p, SETTINGS);
+    enrichProspectWithMultiAgentOKFICM(p, settings);
   }
   res.json({
     okf: p.okf,
@@ -351,7 +373,8 @@ app.get('/api/prospects/:id/okf', (req, res) => {
 
 // Add a new decision-maker contact to a prospect
 app.post('/api/prospects/:id/people', async (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, settings, save } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
   const { name, role = 'Decision Maker', dept = 'Leadership', bio, li } = req.body;
@@ -365,16 +388,17 @@ app.post('/api/prospects/:id/people', async (req, res) => {
     li: li || `linkedin.com/in/${name.toLowerCase().replace(/\s+/g, '-')}`,
   });
   p.contactIdx = p.people.length - 1;
-  p.sequence = await generateFullSequenceWithAI(p, 'Warm & Catchy', 'Standard', SETTINGS);
+  p.sequence = await generateFullSequenceWithAI(p, 'Warm & Catchy', 'Standard', settings);
   updateOutreachStatus(p);
 
-  savePersistedState();
+  save();
   res.status(201).json(p);
 });
 
 // Update or regenerate a specific sequence step
 app.patch('/api/prospects/:id/sequence/:stepIdx', async (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, settings, save } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
   const idx = parseInt(req.params.stepIdx, 10);
@@ -390,7 +414,7 @@ app.patch('/api/prospects/:id/sequence/:stepIdx', async (req, res) => {
       idx,
       (tone as Tone) || 'Warm & Catchy',
       (len as Length) || 'Standard',
-      SETTINGS,
+      settings,
       targetCh
     );
   } else {
@@ -412,31 +436,32 @@ app.patch('/api/prospects/:id/sequence/:stepIdx', async (req, res) => {
   }
 
   updateOutreachStatus(p);
-  savePersistedState();
+  save();
   res.json(p);
 });
 
 // Approve entire sequence for a prospect
 app.post('/api/prospects/:id/sequence/approve-all', (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, save } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
   p.sequence.forEach((s) => (s.appr = true));
   updateOutreachStatus(p);
-  savePersistedState();
+  save();
   res.json(p);
 });
 
 // Add an extra follow-up touchpoint step to a prospect's sequence
 app.post('/api/prospects/:id/sequence/add-step', (req, res) => {
-  const p = PROSPECTS_DB[req.params.id];
+  const { prospects, settings, save } = getUserCtx(req);
+  const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
 
   const num = p.sequence.length + 1;
   const day = `Day ${num * 3 + 1}`;
   const person = p.people[p.contactIdx] || p.people[0];
-  const first = person.name.split(' ')[0];
-  const extraStep = buildStepContent(p, 1, 'Warm & Catchy', 'Standard', SETTINGS, 'LinkedIn');
+  const extraStep = buildStepContent(p, 1, 'Warm & Catchy', 'Standard', settings, 'LinkedIn');
 
   p.sequence.push({
     step: num,
@@ -444,47 +469,50 @@ app.post('/api/prospects/:id/sequence/add-step', (req, res) => {
     label: `Follow-up #${num - 1}`,
     ch: 'LinkedIn',
     goal: 'Warm check-in & architecture benchmark share',
-    subj: extraStep.subj || `Solving ${p.name}'s scaling bottlenecks with ${SETTINGS.companyName}`,
+    subj: extraStep.subj || `Solving ${p.name}'s scaling bottlenecks with ${settings.companyName}`,
     body: extraStep.body,
     appr: false,
   });
 
   updateOutreachStatus(p);
-  savePersistedState();
+  save();
   res.status(201).json(p);
 });
 
 // Get & update company settings
-app.get('/api/settings', (_req, res) => {
-  res.json(SETTINGS);
+app.get('/api/settings', (req, res) => {
+  const { settings } = getUserCtx(req);
+  res.json(settings);
 });
 
 app.put('/api/settings', (req, res) => {
+  const { settings, save } = getUserCtx(req);
   const { companyName, domain, category, description, senderName, offerings } = req.body;
-  if (companyName) SETTINGS.companyName = companyName;
-  if (domain) SETTINGS.domain = domain;
-  if (category) SETTINGS.category = category;
-  if (description) SETTINGS.description = description;
-  if (senderName) SETTINGS.senderName = senderName;
-  if (Array.isArray(offerings)) SETTINGS.offerings = offerings;
-  savePersistedState();
-  res.json(SETTINGS);
+  if (companyName) settings.companyName = companyName;
+  if (domain) settings.domain = domain;
+  if (category) settings.category = category;
+  if (description) settings.description = description;
+  if (senderName) settings.senderName = senderName;
+  if (Array.isArray(offerings)) settings.offerings = offerings;
+  save();
+  res.json(settings);
 });
 
 // LIVE OFFERINGS SCRAPER: Scrape seller's actual website to import offerings
 app.post('/api/settings/import-website', async (req, res) => {
   try {
-    const targetDomain = req.body.domain || SETTINGS.domain;
+    const { settings, save } = getUserCtx(req);
+    const targetDomain = req.body.domain || settings.domain;
     const scraped = await scrapeOfferingsFromSellerDomain(targetDomain);
     if (scraped.description) {
-      SETTINGS.description = scraped.description;
+      settings.description = scraped.description;
     }
     if (scraped.offerings.length > 0) {
-      SETTINGS.offerings = scraped.offerings;
+      settings.offerings = scraped.offerings;
     }
-    savePersistedState();
+    save();
     res.json({
-      settings: SETTINGS,
+      settings,
       importedCount: scraped.offerings.length,
     });
   } catch (err) {
