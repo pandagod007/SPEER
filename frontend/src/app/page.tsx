@@ -873,20 +873,9 @@ export default function ProspectIQApp() {
     <>
       <div className="app">
         <nav className="side-nav">
-          <div
-            className="logo"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingRight: 4,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <img src="/logo.png" alt="speer logo" />
-              speer
-            </div>
-            {hasClerkKeys && <UserButton afterSignOutUrl="/" />}
+          <div className="logo">
+            <img src="/logo.png" alt="speer logo" />
+            speer
           </div>
           {navItems.map(([key, label]) => (
             <button
@@ -897,50 +886,102 @@ export default function ProspectIQApp() {
               {label}
             </button>
           ))}
-          <button
-            className={`validator-btn ${activeNavKey === 'prog' ? 'on' : ''}`}
-            onClick={() => setView('prog')}
-          >
-            <i
-              className={`status-dot ${isRunningLive ? 'yellow' : 'green'}`}
-              style={{
-                background: activeNavKey === 'prog' ? '#10260f' : isRunningLive ? '#facc15' : '#4ade80',
-              }}
-            />
-            {isRunningLive
-              ? `Validating (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
-              : 'Live pipeline validator'}
-          </button>
 
-          {hasClerkKeys && user && (
-            <div
+          <div
+            style={{
+              marginTop: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setView('prog')}
               style={{
-                marginTop: 'auto',
-                padding: '12px 10px',
-                borderRadius: 16,
-                background: 'var(--bg)',
+                all: 'unset',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
                 fontSize: 12,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
+                fontWeight: 600,
+                color: activeNavKey === 'prog' ? 'var(--pd)' : 'var(--mut)',
+                padding: '6px 10px',
+                borderRadius: 8,
+                transition: 'color 0.15s ease',
+                width: 'fit-content',
               }}
             >
-              <div style={{ fontWeight: 700, color: 'var(--ink)' }}>
-                {user.fullName || user.primaryEmailAddress?.emailAddress?.split('@')[0]}
-              </div>
+              <i
+                className={`status-dot ${isRunningLive ? 'yellow' : 'green'}`}
+                style={{
+                  background: activeNavKey === 'prog' ? '#10260f' : isRunningLive ? '#facc15' : '#4ade80',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
+              />
+              <span>
+                {isRunningLive
+                  ? `Validating (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
+                  : 'Live pipeline validator'}
+              </span>
+            </button>
+
+            {hasClerkKeys && user && (
               <div
                 style={{
-                  fontSize: 11,
-                  color: 'var(--mut)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  padding: '10px 12px',
+                  borderRadius: 18,
+                  background: 'var(--bg)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
                 }}
               >
-                {user.primaryEmailAddress?.emailAddress}
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                  <UserButton afterSignOutUrl="/" />
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: 'var(--ink)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {user.fullName || user.primaryEmailAddress?.emailAddress?.split('@')[0]}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--mut)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={user.primaryEmailAddress?.emailAddress}
+                  >
+                    {user.primaryEmailAddress?.emailAddress}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </nav>
 
         <main className="main-area">
