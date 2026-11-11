@@ -483,7 +483,7 @@ export default function ProspectIQApp() {
     ['new', 'Research Prospect'],
     ['pros', 'Prospects'],
     ['drafts', 'Outreach Drafts'],
-    ['set', 'Company Settings'],
+    ['set', 'Set Your Company Profile'],
   ];
 
   const activeNavKey: ViewMode =
@@ -2454,7 +2454,7 @@ export default function ProspectIQApp() {
           {view === 'set' && settings && (
             <>
               <div>
-                <h1>Company settings</h1>
+                <h1>Set your company profile</h1>
                 <div className="mut">
                   Configure your company profile and default outreach persona used by the AI engine.
                 </div>
