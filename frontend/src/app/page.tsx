@@ -60,7 +60,7 @@ export default function ProspectIQApp() {
 
   const [view, setView] = useState<ViewMode>('dash');
   const [prospects, setProspects] = useState<Prospect[]>([]);
-  const [activePid, setActivePid] = useState<string>('acme');
+  const [activePid, setActivePid] = useState<string>('');
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -125,8 +125,12 @@ export default function ProspectIQApp() {
       ]);
       if (pRes.ok) {
         const data = await pRes.json();
-        setProspects(sortProspectsLatestFirst(data.prospects || []));
+        const sorted = sortProspectsLatestFirst(data.prospects || []);
+        setProspects(sorted);
         setGeminiConfigured(Boolean(data.geminiConfigured));
+        if (sorted.length > 0) {
+          setActivePid((prev) => prev || sorted[0].id);
+        }
       }
       if (sRes.ok) {
         const sData = await sRes.json();
@@ -701,8 +705,18 @@ export default function ProspectIQApp() {
         <tbody>
           {list.length === 0 ? (
             <tr>
-              <td colSpan={5} className="mut" style={{ textAlign: 'center', padding: 24 }}>
-                No prospects matching &ldquo;{searchQuery}&rdquo;.
+              <td colSpan={5} className="mut" style={{ textAlign: 'center', padding: 36 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>
+                  No prospects researched yet
+                </div>
+                <div style={{ fontSize: 13, marginBottom: 16 }}>
+                  {searchQuery
+                    ? `No prospects matching "${searchQuery}".`
+                    : 'Your workspace is empty and completely private. Research any real company online to start.'}
+                </div>
+                <button className="btn sm" onClick={() => setView('new')}>
+                  + Research your first prospect
+                </button>
               </td>
             </tr>
           ) : (
@@ -1584,6 +1598,35 @@ export default function ProspectIQApp() {
               </>
             );
           })()}
+
+          {/* EMPTY PROSPECT STATE FOR INTEL / ANGLES / DRAFT */}
+          {(view === 'intel' || view === 'angles' || view === 'draft') && !curP && (
+            <div
+              className="card"
+              style={{
+                textAlign: 'center',
+                padding: '48px 24px',
+                maxWidth: 580,
+                margin: '40px auto',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <h2>No prospect selected</h2>
+              <div className="mut" style={{ fontSize: 14, lineHeight: 1.5, maxWidth: 440 }}>
+                Your workspace is empty and completely private. Research any real company (such as Stripe, Cloudflare, or your target client) to automatically generate live intelligence and outreach sequences.
+              </div>
+              <button
+                className="btn"
+                style={{ marginTop: 12 }}
+                onClick={() => setView('new')}
+              >
+                + Research new prospect
+              </button>
+            </div>
+          )}
 
           {/* PROSPECT INTELLIGENCE VIEW */}
           {view === 'intel' && curP && (

@@ -396,21 +396,7 @@ const rawProspects: Array<Omit<Prospect, 'sequence'>> = [
 
 export const PROSPECTS_DB: Record<string, Prospect> = {};
 
-for (const raw of rawProspects) {
-  const seq = buildFullSequence(raw, 'Warm & Catchy', 'Standard', SETTINGS);
-  if (raw.id === 'northwind') {
-    seq.forEach((s) => (s.appr = true));
-  } else if (raw.id === 'helio') {
-    seq[0].appr = true;
-  }
-  const full: Prospect = {
-    ...raw,
-    sequence: seq,
-  };
-  PROSPECTS_DB[raw.id] = enrichProspectWithMultiAgentOKFICM(full, SETTINGS);
-}
-
 export function getDefaultProspects(): Record<string, Prospect> {
-  return JSON.parse(JSON.stringify(PROSPECTS_DB));
+  return {};
 }
 
