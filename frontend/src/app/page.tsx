@@ -65,6 +65,7 @@ export default function ProspectIQApp() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const authFetch = useCallback(
@@ -136,9 +137,13 @@ export default function ProspectIQApp() {
       if (sRes.ok) {
         const sData = await sRes.json();
         setSettings(sData);
+        setBackendError(null);
+      } else {
+        setBackendError(`Backend API returned ${sRes.status} ${sRes.statusText}`.trim());
       }
     } catch (err) {
       console.error('Error connecting to backend API:', err);
+      setBackendError('Could not reach the backend API.');
     } finally {
       setLoading(false);
     }
@@ -1802,7 +1807,7 @@ export default function ProspectIQApp() {
                     {curP.date}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
+                <div style={{ display: 'flex', gap: 8, flex: '0 0 auto', flexWrap: 'wrap' }}>
                   <button
                     className="btn sec"
                     disabled={refreshing || isRunningLive}
@@ -1812,6 +1817,11 @@ export default function ProspectIQApp() {
                       ? `Fetching live updates (${Math.min(progStep + 1, PIPELINE_STAGES.length)}/${PIPELINE_STAGES.length})…`
                       : '↻ Refresh live online'}
                   </button>
+                  {curP.sequence && curP.sequence.length > 0 && (
+                    <button className="btn sec" onClick={() => setView('draft')}>
+                      Sequence draft →
+                    </button>
+                  )}
                   <button className="btn" onClick={() => setView('angles')}>
                     Outreach angles →
                   </button>
@@ -1868,28 +1878,43 @@ export default function ProspectIQApp() {
                           {loadingMoreSignals ? 'Scanning…' : '+ Give more signals'}
                         </button>
                       </div>
-                      {curP.signals.map((x) => (
-                        <div key={x.id} className="ev">
-                          <span>{x.t}</span>
-                          <span className="mut">{x.d}</span>
-                        </div>
-                      ))}
+                      <div className="ev-list-scroll">
+                        {curP.signals.map((x) => (
+                          <div key={x.id} className="ev">
+                            <span style={{ minWidth: 0, flex: 1, paddingRight: 6 }}>
+                              <span style={{ fontWeight: 600, lineHeight: 1.35, display: 'inline-block' }}>
+                                {x.t}
+                              </span>
+                              <span className="mut" style={{ fontSize: 12, marginTop: 3, display: 'block' }}>
+                                {x.src ? `${x.src} · ` : ''}{x.d}
+                              </span>
+                            </span>
+                            <span style={{ flexShrink: 0 }}>
+                              <span className="tag ok">Verified</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div className="card">
                       <h2>Decision-makers ({curP.people.length})</h2>
-                      {curP.people.map((person, idx) => (
-                        <div key={person.name} className="ev">
-                          <span>
-                            <b>{person.name}</b>{' '}
-                            {idx === curP.contactIdx && (
-                              <span className="tag ok" style={{ marginLeft: 6 }}>
-                                Primary
+                      <div className="ev-list-scroll">
+                        {curP.people.map((person, idx) => (
+                          <div key={person.name} className="ev">
+                            <span style={{ minWidth: 0, flex: 1, paddingRight: 6 }}>
+                              <b>{person.name}</b>{' '}
+                              {idx === curP.contactIdx && (
+                                <span className="tag ok" style={{ marginLeft: 6 }}>
+                                  Primary
+                                </span>
+                              )}
+                              <span className="mut" style={{ fontSize: 12, marginTop: 3, display: 'block' }}>
+                                {person.role}
                               </span>
-                            )}
-                          </span>
-                          <span className="mut">{person.role}</span>
-                        </div>
-                      ))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </>
@@ -1897,13 +1922,21 @@ export default function ProspectIQApp() {
 
               {intelTab === 'Signals' && (
                 <>
-                  <div className="row" style={{ flex: 'none' }}>
+                  <div
+                    className="row"
+                    style={{
+                      flex: 'none',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
                     <div
                       style={{
                         display: 'flex',
                         gap: 6,
                         flexWrap: 'wrap',
-                        flex: '1 1 100%',
+                        flex: '1 1 auto',
                       }}
                     >
                       {['All', ...Array.from(new Set(curP.signals.map((s) => s.cat)))].map(
@@ -1918,6 +1951,14 @@ export default function ProspectIQApp() {
                         )
                       )}
                     </div>
+                    <button
+                      className="btn sm sec"
+                      disabled={loadingMoreSignals}
+                      onClick={loadMoreSignals}
+                      style={{ flex: '0 0 auto' }}
+                    >
+                      {loadingMoreSignals ? 'Scanning news & web…' : '+ Scan for more signals'}
+                    </button>
                   </div>
                   {curP.signals
                     .filter((x) => sigFilter === 'All' || x.cat === sigFilter)
@@ -2244,8 +2285,17 @@ export default function ProspectIQApp() {
                         ? 'Sequence Approved'
                         : `${apprCount} of ${seq.length} Approved`}
                     </span>
-                    <button className="btn sm" onClick={approveEntireSequence}>
-                      {allAppr ? 'All Approved ✓' : 'Approve entire sequence'}
+                    <button
+                      className="btn sm"
+                      onClick={() => {
+                        setIntelTab('Signals');
+                        setView('intel');
+                        if (typeof window !== 'undefined') {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                    >
+                      + Add more signals
                     </button>
                   </div>
                 </div>
@@ -2459,19 +2509,76 @@ export default function ProspectIQApp() {
                     }}
                   >
                     <div className="card">
-                      <h2>Evidence used in sequence</h2>
-                      {ev.map(([claim, src, cls, status]) => (
-                        <div key={claim} className="ev">
-                          <span>
-                            {claim}
-                            <br />
-                            <span className="mut">{src}</span>
-                          </span>
-                          <span>
-                            <span className={`tag ${cls}`}>{status}</span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 8,
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <h2 style={{ fontSize: 16 }}>Evidence used in sequence</h2>
+                          <span
+                            className="tag"
+                            style={{
+                              fontSize: 11,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                            }}
+                          >
+                            {ev.length}
                           </span>
                         </div>
-                      ))}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {ev.length > 3 && (
+                            <span className="mut" style={{ fontSize: 11 }}>
+                              Scroll to view all ·
+                            </span>
+                          )}
+                          <button
+                            className="btn sm sec"
+                            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999 }}
+                            onClick={() => {
+                              setIntelTab('Signals');
+                              setView('intel');
+                              if (typeof window !== 'undefined') {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }
+                            }}
+                          >
+                            + Add signals
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="ev-list-scroll">
+                        {ev.length === 0 ? (
+                          <div className="mut" style={{ padding: '12px 0', fontSize: 13 }}>
+                            No evidence attached to this sequence.
+                          </div>
+                        ) : (
+                          ev.map(([claim, src, cls, status]) => (
+                            <div key={claim} className="ev">
+                              <span style={{ minWidth: 0, flex: 1, paddingRight: 6 }}>
+                                <span style={{ fontWeight: 600, lineHeight: 1.35, display: 'inline-block' }}>
+                                  {claim}
+                                </span>
+                                <span
+                                  className="mut"
+                                  style={{ fontSize: 12, marginTop: 3, display: 'block' }}
+                                >
+                                  {src}
+                                </span>
+                              </span>
+                              <span style={{ flexShrink: 0 }}>
+                                <span className={`tag ${cls}`}>{status}</span>
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                     <div className="card dark">
                       <h2>Quality checks</h2>
@@ -2784,6 +2891,20 @@ export default function ProspectIQApp() {
               </div>
               {renderProspectTable(filteredProspects, 'draft')}
             </>
+          )}
+
+          {/* BACKEND UNAVAILABLE */}
+          {effectiveView === 'set' && !settings && (
+            <div className="card">
+              <h2>Can&apos;t load your company profile</h2>
+              <div className="mut" style={{ marginBottom: 12 }}>
+                {backendError || 'The backend API did not return your settings.'} Please try again
+                in a moment.
+              </div>
+              <button className="btn" onClick={() => { setLoading(true); fetchAll(); }}>
+                Retry
+              </button>
+            </div>
           )}
 
           {/* COMPANY SETTINGS VIEW */}

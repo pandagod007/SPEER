@@ -369,14 +369,51 @@ tr.lk:hover td { background: var(--bg); }
 .ang { cursor: pointer; border: 2px solid transparent; }
 .ang.sel { border-color: var(--pd); }
 
+.ev-list-scroll {
+  max-height: 290px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  margin-top: 6px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.ev-list-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ev-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ev-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.ev-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--mut);
+}
+
 .ev {
   padding: 10px 0;
   border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   font-size: 13px;
   align-items: center;
+}
+
+.ev > *:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.ev > *:last-child {
+  flex-shrink: 0;
 }
 
 .seq-bar {

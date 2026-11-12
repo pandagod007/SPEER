@@ -46,7 +46,9 @@ textarea{min-height:210px;line-height:1.6;resize:vertical}label{display:block;fo
 .bar{height:8px;border-radius:9px;background:var(--bg);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--pd);transition:width .5s}
 .ang{cursor:pointer;border:2px solid transparent}.ang.sel{border-color:var(--pd)}
 #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--dk);color:var(--on-dk);padding:10px 20px;border-radius:999px;font-weight:700;opacity:0;transition:.25s;pointer-events:none;z-index:99}#toast.show{opacity:1}
-.ev{padding:10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;font-size:13px;align-items:center}
+.ev-list-scroll{max-height:290px;overflow-y:auto;overflow-x:hidden;padding-right:6px;margin-top:6px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.ev-list-scroll::-webkit-scrollbar{width:5px}.ev-list-scroll::-webkit-scrollbar-track{background:transparent}.ev-list-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px}
+.ev{padding:10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;font-size:13px;align-items:center}.ev>*:first-child{min-width:0;flex:1}.ev>*:last-child{flex-shrink:0}
 /* Sequence timeline styles */
 .seq-bar{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
 .seq-step{all:unset;cursor:pointer;flex:1 1 160px;min-width:155px;background:var(--card);border:2px solid transparent;border-radius:22px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;transition:border-color .15s,background .15s}
@@ -330,7 +332,7 @@ function draft(){
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto">
    <span class="tag ${allAppr?'ok':'rev'}">${allAppr?'Sequence Approved':`${apprCount} of ${seq.length} Approved`}</span>
-   <button class="btn sm" onclick="approveAll()">${allAppr?'All Approved ✓':'Approve entire sequence'}</button>
+   <button class="btn sm" onclick="S.tab='Signals';go('intel')">+ Add more signals</button>
   </div>
  </div>
 
@@ -371,7 +373,18 @@ function draft(){
    </div>
   </div>
   <div style="flex:1 1 280px;display:flex;flex-direction:column;gap:16px">
-   <div class="card"><h2>Evidence used in sequence</h2>${ev.map(e=>`<div class="ev"><span>${e[0]}<br><span class="mut">${e[1]}</span></span><span><span class="tag ${e[2]}">${e[3]}</span></span></div>`).join('')}</div>
+   <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
+     <div style="display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:16px">Evidence used in sequence</h2>
+      <span class="tag" style="font-size:11px;padding:2px 8px;border-radius:999px">${ev.length}</span>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px">${ev.length > 3 ? '<span class="mut" style="font-size:11px">Scroll to view all ·</span>' : ''}<button class="btn sm sec" style="font-size:11px;padding:3px 10px;border-radius:999px" onclick="S.tab='Signals';go('intel')">+ Add signals</button></div>
+    </div>
+    <div class="ev-list-scroll">
+     ${ev.length === 0 ? '<div class="mut" style="padding:12px 0;font-size:13px">No evidence attached to this sequence.</div>' : ev.map(e=>`<div class="ev"><span style="min-width:0;flex:1;padding-right:6px"><span style="font-weight:600;line-height:1.35;display:inline-block">${e[0]}</span><span class="mut" style="font-size:12px;margin-top:3px;display:block">${e[1]}</span></span><span style="flex-shrink:0"><span class="tag ${e[2]}">${e[3]}</span></span></div>`).join('')}
+    </div>
+   </div>
    <div class="card dark"><h2>Quality checks</h2><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${q.map(x=>`<span class="tag ${x[1]}">${x[0]}</span>`).join('')}</div></div>
    <div class="card"><h2>Recipient context</h2><div><b>${person.name}</b> · ${person.role}</div><div class="mut" style="margin-top:4px">${person.bio}</div></div>
   </div>
