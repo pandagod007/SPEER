@@ -198,7 +198,7 @@ export default function ProspectIQApp() {
     }, 2400);
   }, []);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (retryCount = 0) => {
     try {
       const [pRes, sRes] = await Promise.all([
         authFetch('/api/prospects'),
@@ -217,12 +217,24 @@ export default function ProspectIQApp() {
         const sData = await sRes.json();
         setSettings(sData);
         setBackendError(null);
+      } else if (sRes.status === 502 && retryCount < 2) {
+        // Backend may still be spinning up; retry after 1.5s
+        setTimeout(() => fetchAll(retryCount + 1), 1500);
+        return;
       } else {
-        setBackendError(`Backend API returned ${sRes.status} ${sRes.statusText}`.trim());
+        if (sRes.status === 502) {
+          setBackendError('Backend API returned 502 (Backend server is offline on port 4000).');
+        } else {
+          setBackendError(`Backend API returned ${sRes.status} ${sRes.statusText}`.trim());
+        }
       }
     } catch (err) {
+      if (retryCount < 2) {
+        setTimeout(() => fetchAll(retryCount + 1), 1500);
+        return;
+      }
       console.error('Error connecting to backend API:', err);
-      setBackendError('Could not reach the backend API.');
+      setBackendError('Could not reach the backend API. Please make sure the backend server is running on port 4000.');
     } finally {
       setLoading(false);
     }
@@ -3161,14 +3173,50 @@ export default function ProspectIQApp() {
 
           {/* BACKEND UNAVAILABLE */}
           {effectiveView === 'set' && !settings && (
-            <div className="card">
+            <div className="card" style={{ maxWidth: 640 }}>
               <h2>Can&apos;t load your company profile</h2>
-              <div className="mut" style={{ marginBottom: 12 }}>
-                {backendError || 'The backend API did not return your settings.'} Please try again
-                in a moment.
+              <div className="mut" style={{ marginBottom: 16, lineHeight: 1.6 }}>
+                {backendError || 'The backend API did not return your settings.'}
               </div>
-              <button className="btn" onClick={() => { setLoading(true); fetchAll(); }}>
-                Retry
+              <div
+                style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid var(--border, #333)',
+                  borderRadius: 10,
+                  padding: '14px 18px',
+                  marginBottom: 16,
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>💡 How to fix:</div>
+                <div style={{ color: 'var(--sub, #aaa)' }}>
+                  The Next.js frontend is running, but the Express backend server on port 4000 is not reachable.
+                  In your terminal at the project root, run:
+                </div>
+                <pre
+                  style={{
+                    margin: '8px 0 0 0',
+                    padding: '8px 12px',
+                    background: '#0d1117',
+                    borderRadius: 6,
+                    color: '#58a6ff',
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                  }}
+                >
+                  npm run dev
+                </pre>
+              </div>
+              <button
+                className="btn"
+                onClick={() => {
+                  setLoading(true);
+                  setBackendError(null);
+                  fetchAll();
+                }}
+              >
+                Retry Connection
               </button>
             </div>
           )}
