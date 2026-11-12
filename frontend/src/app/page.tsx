@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useUser, UserButton, SignIn } from '@clerk/nextjs';
+import { useUser, UserButton, SignIn, useClerk } from '@clerk/nextjs';
 import { Prospect, CompanySettings, Tone, Length, Channel, AgentTraceLog } from '@/types';
 
 type ViewMode = 'dash' | 'new' | 'prog' | 'intel' | 'angles' | 'draft' | 'pros' | 'drafts' | 'set';
@@ -53,6 +53,7 @@ function sortProspectsLatestFirst(list: Prospect[]): Prospect[] {
 
 export default function ProspectIQApp() {
   const { user, isLoaded, isSignedIn } = useUser();
+  const { signOut } = useClerk();
   const hasClerkKeys = Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
     'pk_test_Y2FyaW5nLWNpY2FkYS05NjEzLmNsZXJrLmFjY291bnRzLmRldiQ'
@@ -967,51 +968,106 @@ export default function ProspectIQApp() {
             {hasClerkKeys && user && (
               <div
                 style={{
-                  padding: '10px 12px',
-                  borderRadius: 18,
+                  padding: '6px 8px',
+                  borderRadius: 12,
                   background: 'var(--bg)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  justifyContent: 'space-between',
+                  gap: 8,
                 }}
               >
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                  <UserButton afterSignOutUrl="/" />
-                </div>
                 <div
                   style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1,
+                    alignItems: 'center',
+                    gap: 8,
                     minWidth: 0,
-                    overflow: 'hidden',
+                    flex: 1,
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: 'var(--ink)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {user.fullName || user.primaryEmailAddress?.emailAddress?.split('@')[0]}
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                    <UserButton afterSignOutUrl="/" />
                   </div>
                   <div
                     style={{
-                      fontSize: 11,
-                      color: 'var(--mut)',
-                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0,
+                      minWidth: 0,
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      lineHeight: 1.2,
                     }}
-                    title={user.primaryEmailAddress?.emailAddress}
                   >
-                    {user.primaryEmailAddress?.emailAddress}
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: 'var(--ink)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {user.fullName || user.primaryEmailAddress?.emailAddress?.split('@')[0]}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        color: 'var(--mut)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                      title={user.primaryEmailAddress?.emailAddress}
+                    >
+                      {user.primaryEmailAddress?.emailAddress}
+                    </div>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => signOut({ redirectUrl: '/' })}
+                  title="Log out"
+                  style={{
+                    all: 'unset',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    borderRadius: 8,
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.22)';
+                    e.currentTarget.style.borderColor = '#ef4444';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
