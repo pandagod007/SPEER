@@ -993,7 +993,7 @@ export default function ProspectIQApp() {
               textShadow: '0 1px 6px rgba(0, 0, 0, 0.6)',
             }}
           >
-            AI-Powered B2B Prospect Intelligence & Hyper-Personalized Sequences
+            Every conversation starts with a reason
           </div>
 
           <div
