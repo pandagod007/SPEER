@@ -816,7 +816,12 @@ export default function ProspectIQApp() {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '32px 16px',
-          background: 'var(--bg)',
+          backgroundColor: '#0d1117',
+          backgroundImage:
+            "linear-gradient(rgba(13, 17, 23, 0.4), rgba(13, 17, 23, 0.65)), url('/login-bg.jpg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
         }}
       >
         <div
@@ -834,26 +839,34 @@ export default function ProspectIQApp() {
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              fontSize: 32,
-              fontWeight: 700,
+              fontSize: 34,
+              fontWeight: 800,
               fontFamily: 'DM Sans',
-              color: 'var(--ink)',
+              color: '#ffffff',
+              textShadow: '0 2px 12px rgba(0, 0, 0, 0.6)',
             }}
           >
             <img
               src="/logo.png"
               alt="speer logo"
-              style={{ width: 44, height: 44, borderRadius: 12 }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+              }}
             />
             speer
           </div>
           <div
             style={{
               textAlign: 'center',
-              color: 'var(--mut)',
+              color: 'rgba(255, 255, 255, 0.85)',
               fontSize: 14,
+              fontWeight: 500,
               lineHeight: 1.5,
               marginTop: -6,
+              textShadow: '0 1px 6px rgba(0, 0, 0, 0.6)',
             }}
           >
             AI-Powered B2B Prospect Intelligence & Hyper-Personalized Sequences
@@ -876,8 +889,14 @@ export default function ProspectIQApp() {
               alignItems: 'center',
               gap: 8,
               fontSize: 12,
-              color: 'var(--mut)',
+              color: 'rgba(255, 255, 255, 0.8)',
               marginTop: 12,
+              background: 'rgba(0, 0, 0, 0.35)',
+              padding: '6px 14px',
+              borderRadius: 20,
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
             }}
           >
             <span>🔒 Isolated & Private Workspace</span>
