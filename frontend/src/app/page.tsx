@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUser, UserButton, SignIn, useClerk } from '@clerk/nextjs';
-import { Prospect, CompanySettings, Tone, Length, Channel, AgentTraceLog } from '@/types';
+import { Prospect, Signal, CompanySettings, Tone, Length, Channel, AgentTraceLog } from '@/types';
 
 type ViewMode = 'dash' | 'new' | 'prog' | 'intel' | 'angles' | 'draft' | 'pros' | 'drafts' | 'set';
 type IntelTab = 'Overview' | 'Signals' | 'People' | 'Sources';
@@ -49,6 +49,85 @@ function getProspectTimestamp(p: Prospect): number {
 
 function sortProspectsLatestFirst(list: Prospect[]): Prospect[] {
   return list.slice().sort((a, b) => getProspectTimestamp(b) - getProspectTimestamp(a));
+}
+
+function getSignalBullets(
+  sig: Signal,
+  prospect: Prospect,
+  settings: CompanySettings | null
+): string[] {
+  if (Array.isArray(sig.bullets) && sig.bullets.length === 5) {
+    return sig.bullets;
+  }
+  const seller = settings?.companyName || 'Speer';
+  const offeringDesc = settings?.offerings?.[0]?.name || 'sales intelligence & outreach automation';
+  const rawHead = (sig.t || '').trim();
+  const rawSummary = (sig.s || '').trim();
+  const quoteMatch = rawSummary.match(/:\s*["“]([^"”]+)["”]/);
+  const headline = (quoteMatch && quoteMatch[1] ? quoteMatch[1] : rawHead)
+    .replace(/^Live news coverage from [^:]+:\s*"?/i, '')
+    .replace(/"?\s*\.?$/i, '')
+    .trim();
+  const cat = (sig.cat || 'General').toLowerCase();
+
+  const b1 = `${prospect.name}: ${headline}`.slice(0, 115);
+
+  let b2 = '';
+  if (cat.includes('tech')) {
+    b2 = 'Modernizing platform infrastructure & automated workflow capabilities at scale';
+  } else if (cat.includes('lead')) {
+    b2 = 'Leadership transition triggering internal strategy realignment & vendor evaluation';
+  } else if (cat.includes('expan') || cat.includes('growth')) {
+    b2 = 'Footprint scaling rapidly, driving multi-site coordination & workflow requirements';
+  } else if (cat.includes('hir')) {
+    b2 = 'Aggressive hiring across key engineering & specialized execution functions';
+  } else {
+    b2 =
+      sig.s && sig.s.length > 15 && !sig.s.startsWith('Live news')
+        ? sig.s.slice(0, 110)
+        : 'Active operational milestone driving near-term vendor and tooling decisions';
+  }
+
+  let b3 = '';
+  if (cat.includes('tech')) {
+    b3 = 'Directly impacts VP Engineering, Platform Leads & Technical Architecture teams';
+  } else if (cat.includes('lead')) {
+    b3 = 'Directly impacts Executive Committee & newly appointed department leaders';
+  } else if (cat.includes('expan')) {
+    b3 = 'Affects VP Operations, Regional Directors & Revenue teams driving expansion';
+  } else if (cat.includes('hir')) {
+    b3 = 'Impacts Hiring Managers & Team Leads striving to ramp up newly joined talent';
+  } else {
+    b3 = 'Directly affects key decision-makers evaluating operational agility and velocity';
+  }
+
+  let b4 = '';
+  if (cat.includes('tech')) {
+    b4 = `Relevance to ${seller}: Direct opening to position our ${offeringDesc} alongside their new tech stack`;
+  } else if (cat.includes('lead')) {
+    b4 = `Relevance to ${seller}: High-intent window to introduce our solutions before new vendor contracts lock in`;
+  } else if (cat.includes('expan')) {
+    b4 = `Relevance to ${seller}: Multi-region expansion demands our automated intelligence to eliminate pipeline friction`;
+  } else if (cat.includes('hir')) {
+    b4 = `Relevance to ${seller}: Growing teams need our workflow leverage to achieve high output without adding tool bloat`;
+  } else {
+    b4 = `Relevance to ${seller}: Provides immediate grounded relevance and checkable rationale for partnership outreach`;
+  }
+
+  let b5 = '';
+  if (cat.includes('tech')) {
+    b5 = 'Outreach hook: Pitch joint integration & automated workflow orchestration tailored to their roadmap';
+  } else if (cat.includes('lead')) {
+    b5 = 'Outreach hook: Congratulate leadership on mandate & share actionable benchmark audit tailored to their priorities';
+  } else if (cat.includes('expan')) {
+    b5 = 'Outreach hook: Present blueprint on streamlining pipeline velocity across their expanding operations';
+  } else if (cat.includes('hir')) {
+    b5 = 'Outreach hook: Offer workflow solutions that double productivity for new hires without adding tool clutter';
+  } else {
+    b5 = `Outreach hook: Reference ${sig.src || 'recent announcements'} to initiate an evidence-backed consultative dialogue`;
+  }
+
+  return [b1, b2, b3, b4, b5];
 }
 
 export default function ProspectIQApp() {
@@ -177,6 +256,46 @@ export default function ProspectIQApp() {
     });
     if (res.ok) {
       updateProspectInState(await res.json());
+    }
+  };
+
+  const [expandedSignals, setExpandedSignals] = useState<Record<number, boolean>>({});
+  const [refreshingSigId, setRefreshingSigId] = useState<number | null>(null);
+
+  const toggleSignalExpand = (sigId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedSignals((prev) => ({
+      ...prev,
+      [sigId]: !prev[sigId],
+    }));
+  };
+
+  const refreshSignalBullets = async (sigId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!curP || refreshingSigId !== null) return;
+    setRefreshingSigId(sigId);
+    try {
+      const res = await authFetch(`/api/prospects/${curP.id}/signals/${sigId}/bullets`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prospect) {
+          updateProspectInState(data.prospect);
+        } else if (data.bullets) {
+          const updatedSignals = curP.signals.map((s) =>
+            s.id === sigId ? { ...s, bullets: data.bullets } : s
+          );
+          updateProspectInState({ ...curP, signals: updatedSignals });
+        }
+        showToast('5-point brief updated with latest AI relevance analysis!');
+      } else {
+        showToast('Could not refresh bullets.');
+      }
+    } catch (err) {
+      console.error('Error refreshing signal bullets:', err);
+    } finally {
+      setRefreshingSigId(null);
     }
   };
 
@@ -1929,6 +2048,7 @@ export default function ProspectIQApp() {
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       gap: 10,
+                      flexWrap: 'wrap',
                     }}
                   >
                     <div
@@ -1951,53 +2071,199 @@ export default function ProspectIQApp() {
                         )
                       )}
                     </div>
-                    <button
-                      className="btn sm sec"
-                      disabled={loadingMoreSignals}
-                      onClick={loadMoreSignals}
-                      style={{ flex: '0 0 auto' }}
-                    >
-                      {loadingMoreSignals ? 'Scanning news & web…' : '+ Scan for more signals'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn sm sec"
+                        onClick={() => {
+                          const visible = curP.signals.filter(
+                            (x) => sigFilter === 'All' || x.cat === sigFilter
+                          );
+                          const allExpanded = visible.every((s) => expandedSignals[s.id]);
+                          const next = { ...expandedSignals };
+                          visible.forEach((s) => {
+                            next[s.id] = !allExpanded;
+                          });
+                          setExpandedSignals(next);
+                        }}
+                        style={{ flex: '0 0 auto' }}
+                      >
+                        {curP.signals
+                          .filter((x) => sigFilter === 'All' || x.cat === sigFilter)
+                          .every((s) => expandedSignals[s.id])
+                          ? '▲ Collapse all briefs'
+                          : '▼ Expand all briefs (5-pt summary)'}
+                      </button>
+                      <button
+                        className="btn sm sec"
+                        disabled={loadingMoreSignals}
+                        onClick={loadMoreSignals}
+                        style={{ flex: '0 0 auto' }}
+                      >
+                        {loadingMoreSignals ? 'Scanning news & web…' : '+ Scan for more signals'}
+                      </button>
+                    </div>
                   </div>
                   {curP.signals
                     .filter((x) => sigFilter === 'All' || x.cat === sigFilter)
-                    .map((x) => (
-                      <div
-                        key={x.id}
-                        className={`card sig ${curP.sel.includes(x.id) ? 'sel' : ''}`}
-                        onClick={() => toggleSignal(x.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={curP.sel.includes(x.id)}
-                          onChange={() => {}}
-                          aria-label={`Select ${x.t}`}
-                        />
-                        <div style={{ flex: 1 }}>
-                          <div
-                            className="row"
-                            style={{ justifyContent: 'space-between', gap: 8 }}
-                          >
-                            <h3>{x.t}</h3>
-                            <span>
-                              <span className="tag">{x.cat}</span>{' '}
-                              <span className={`tag ${x.r}`}>{x.r}</span>
-                            </span>
-                          </div>
-                          <div>{x.s}</div>
-                          <div className="mut" style={{ marginTop: 6 }}>
-                            <b>AI reasoning:</b> {x.why}
-                          </div>
-                          <div
-                            className="mut"
-                            style={{ fontSize: 12, marginTop: 4 }}
-                          >
-                            Source: {x.src} · Published {x.d} · Verified
+                    .map((x) => {
+                      const isExpanded = Boolean(expandedSignals[x.id]);
+                      const bullets = getSignalBullets(x, curP, settings);
+                      return (
+                        <div
+                          key={x.id}
+                          className={`card sig ${curP.sel.includes(x.id) ? 'sel' : ''}`}
+                          onClick={() => toggleSignal(x.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={curP.sel.includes(x.id)}
+                            onChange={() => {}}
+                            aria-label={`Select ${x.t}`}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              className="row"
+                              style={{ justifyContent: 'space-between', gap: 8 }}
+                            >
+                              <h3>{x.t}</h3>
+                              <span>
+                                <span className="tag">{x.cat}</span>{' '}
+                                <span className={`tag ${x.r}`}>{x.r}</span>
+                              </span>
+                            </div>
+                            <div>{x.s}</div>
+                            <div className="mut" style={{ marginTop: 6 }}>
+                              <b>AI reasoning:</b> {x.why}
+                            </div>
+                            <div
+                              className="row"
+                              style={{
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginTop: 8,
+                                gap: 10,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <div
+                                className="mut"
+                                style={{ fontSize: 12 }}
+                              >
+                                Source: {x.src} · Published {x.d} · Verified
+                              </div>
+                              <button
+                                type="button"
+                                className={`btn sm ${isExpanded ? 'inv' : 'sec'}`}
+                                style={{
+                                  fontSize: 11,
+                                  padding: '4px 11px',
+                                  borderRadius: 6,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={(e) => toggleSignalExpand(x.id, e)}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <span style={{ fontSize: 9 }}>▲</span> Hide 5-point brief
+                                  </>
+                                ) : (
+                                  <>
+                                    <span style={{ fontSize: 9 }}>▼</span> Expand (5-point relevance brief)
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {isExpanded && (
+                              <div
+                                style={{
+                                  marginTop: 12,
+                                  padding: '13px 15px',
+                                  borderRadius: 8,
+                                  background: 'rgba(91, 75, 158, 0.08)',
+                                  border: '1px solid rgba(180, 169, 254, 0.35)',
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: 10,
+                                    gap: 8,
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em',
+                                      color: 'var(--pd)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                    }}
+                                  >
+                                    <span>⚡ 5-Point Brief: News Summary &amp; Relevance to {settings?.companyName || 'Our Company'}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <span
+                                      className="tag"
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '2px 7px',
+                                        background: 'var(--pri)',
+                                        color: '#1c1640',
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      5 Crisp Bullets
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="btn sm sec"
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '2px 8px',
+                                        borderRadius: 4,
+                                        height: 'auto',
+                                      }}
+                                      disabled={refreshingSigId === x.id}
+                                      onClick={(e) => refreshSignalBullets(x.id, e)}
+                                    >
+                                      {refreshingSigId === x.id ? 'Generating…' : '↺ Refresh AI Brief'}
+                                    </button>
+                                  </div>
+                                </div>
+                                <ul
+                                  style={{
+                                    margin: 0,
+                                    paddingLeft: 20,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 6,
+                                    fontSize: 13,
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  {bullets.map((b, i) => (
+                                    <li key={i} style={{ color: 'var(--ink)' }}>
+                                      {b}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   <div className="card dark row" style={{ alignItems: 'center' }}>
                     <div>
                       <b>

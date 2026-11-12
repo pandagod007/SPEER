@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { Prospect, Signal, Angle, Person, CompanySettings, Offering, AgentTraceLog } from './types';
-import { buildFullSequence, generateFullSequenceWithAI } from './generator';
+import { buildFullSequence, generateFullSequenceWithAI, generateSignalBullets } from './generator';
 import { enrichProspectWithMultiAgentOKFICM } from './okf_icm';
 
 export type LiveStageEvent =
@@ -610,6 +610,12 @@ export async function runLiveProspectResearch(
     };
   }
 
+  baseProspect.signals.forEach((s) => {
+    if (!s.bullets || s.bullets.length !== 5) {
+      s.bullets = generateSignalBullets(s, baseProspect!, params.settings);
+    }
+  });
+
   const t3Elapsed = Date.now() - t3Start;
   if (onStageEvent && t3Elapsed < 480) {
     await delay(480 - t3Elapsed);
@@ -875,6 +881,12 @@ Return ONLY a valid JSON array of ${count} NEW signal objects (no markdown fence
       }
     }
   }
+
+  newSignals.forEach((s) => {
+    if (!s.bullets || s.bullets.length !== 5) {
+      s.bullets = generateSignalBullets(s, p, settings);
+    }
+  });
 
   return newSignals;
 }

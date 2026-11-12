@@ -1274,3 +1274,157 @@ Return ONLY valid JSON:
     return fallback;
   }
 }
+
+/**
+ * 5-POINT SIGNAL RELEVANCE GENERATOR:
+ * Summarizes the news in crisp bullet points and shows the relation how it is relevant
+ * for our company, in exactly 5 short, punchy bullet points.
+ */
+export function generateSignalBullets(
+  sig: Signal,
+  prospect: { name: string; domain?: string; ind?: string },
+  settings?: CompanySettings | null
+): [string, string, string, string, string] {
+  const seller = settings?.companyName || 'Speer';
+  const offeringDesc = settings?.offerings?.[0]?.name
+    ? `${settings.offerings[0].name}`
+    : 'B2B sales intelligence & outreach automation';
+  const cleanHead = recoverFullHeadline(sig)
+    .replace(/^Live news coverage from [^:]+:\s*"?/i, '')
+    .replace(/"?\s*\.?$/i, '')
+    .trim();
+  const cat = (sig.cat || 'General').toLowerCase();
+
+  // Bullet 1: Core news summary (crisp, short)
+  let b1 = `${prospect.name}: ${cleanHead}`;
+  if (b1.length > 115) b1 = b1.slice(0, 112) + '…';
+
+  // Bullet 2: Operational/technical shift
+  let b2 = '';
+  if (cat.includes('tech')) {
+    b2 = 'Modernizing platform infrastructure & automated workflow capabilities at scale';
+  } else if (cat.includes('lead')) {
+    b2 = 'Leadership transition triggering internal strategy realignment & vendor evaluation';
+  } else if (cat.includes('expan') || cat.includes('growth')) {
+    b2 = 'Footprint scaling rapidly, driving multi-site coordination & workflow requirements';
+  } else if (cat.includes('hir')) {
+    b2 = 'Aggressive hiring across key engineering & specialized execution functions';
+  } else {
+    b2 =
+      sig.s && sig.s.length > 15 && !sig.s.startsWith('Live news')
+        ? sig.s.slice(0, 110)
+        : 'Active operational milestone driving near-term vendor and tooling decisions';
+  }
+
+  // Bullet 3: Impacted committee / stakeholders
+  let b3 = '';
+  if (cat.includes('tech')) {
+    b3 = 'Directly impacts VP Engineering, Platform Leads & Technical Architecture teams';
+  } else if (cat.includes('lead')) {
+    b3 = 'Directly impacts Executive Committee & newly appointed department leaders';
+  } else if (cat.includes('expan')) {
+    b3 = 'Affects VP Operations, Regional Directors & Revenue teams driving expansion';
+  } else if (cat.includes('hir')) {
+    b3 = 'Impacts Hiring Managers & Team Leads striving to ramp up newly joined talent';
+  } else {
+    b3 = 'Directly affects key decision-makers evaluating operational agility and velocity';
+  }
+
+  // Bullet 4: Direct relation to our company
+  let b4 = '';
+  if (cat.includes('tech')) {
+    b4 = `Relevance to ${seller}: Direct opening to position our ${offeringDesc} alongside their new tech stack`;
+  } else if (cat.includes('lead')) {
+    b4 = `Relevance to ${seller}: High-intent window to introduce our solutions before new vendor contracts lock in`;
+  } else if (cat.includes('expan')) {
+    b4 = `Relevance to ${seller}: Multi-region expansion demands our automated intelligence to eliminate pipeline friction`;
+  } else if (cat.includes('hir')) {
+    b4 = `Relevance to ${seller}: Growing teams need our workflow leverage to achieve high output without adding tool bloat`;
+  } else {
+    b4 = `Relevance to ${seller}: Provides immediate grounded relevance and checkable rationale for partnership outreach`;
+  }
+
+  // Bullet 5: Actionable outreach hook
+  let b5 = '';
+  if (cat.includes('tech')) {
+    b5 = 'Outreach hook: Pitch joint integration & automated workflow orchestration tailored to their roadmap';
+  } else if (cat.includes('lead')) {
+    b5 = 'Outreach hook: Congratulate leadership on mandate & share actionable benchmark audit tailored to their priorities';
+  } else if (cat.includes('expan')) {
+    b5 = 'Outreach hook: Present blueprint on streamlining pipeline velocity across their expanding operations';
+  } else if (cat.includes('hir')) {
+    b5 = 'Outreach hook: Offer workflow solutions that double productivity for new hires without adding tool clutter';
+  } else {
+    b5 = `Outreach hook: Reference ${sig.src || 'recent announcements'} to initiate an evidence-backed consultative dialogue`;
+  }
+
+  return [b1, b2, b3, b4, b5];
+}
+
+export async function generateSignalBulletsWithGemini(
+  sig: Signal,
+  prospect: { name: string; domain?: string; ind?: string },
+  settings?: CompanySettings | null
+): Promise<string[]> {
+  const fallback = generateSignalBullets(sig, prospect, settings);
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  if (!apiKey) return fallback;
+
+  try {
+    const seller = settings?.companyName || 'Speer';
+    const cleanHead = recoverFullHeadline(sig);
+    const prompt = `You are an elite B2B sales strategist for "${seller}" (${settings?.category || 'B2B Sales Intelligence & AI Outreach'}).
+Our Company Offerings & Profile: ${settings?.description || 'B2B sales intelligence and AI outreach SaaS, turn target company website and news into evidence-backed brief, personalized outreach sequences.'}
+
+Prospect Company: "${prospect.name}" (${prospect.domain || ''}, Industry: ${prospect.ind || ''}).
+News/Trigger Signal:
+- Title: ${cleanHead}
+- Snippet: ${sig.s}
+- Category: ${sig.cat}
+- AI Reasoning: ${sig.why}
+- Source: ${sig.src} (${sig.d})
+
+TASK:
+Summarize this news in bullet points AND show the relation how it is relevant for our company ("${seller}"), in JUST 5 BULLET POINTS.
+Requirements:
+1. Exactly 5 bullet points.
+2. Crisp and short. No need to be long proper sentences, but must share the core idea clearly.
+3. Structure:
+   - Bullet 1: Core news event summary
+   - Bullet 2: Practical/technical shift behind it
+   - Bullet 3: Key internal teams/stakeholders affected at ${prospect.name}
+   - Bullet 4: Direct relation & relevance to our company (${seller})
+   - Bullet 5: Actionable outreach hook or value proposition
+
+Return ONLY a JSON array of 5 short strings:
+["...", "...", "...", "...", "..."]`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.3,
+        },
+      }),
+    });
+
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) return fallback;
+
+    const parsed = JSON.parse(rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim());
+    if (Array.isArray(parsed) && parsed.length === 5) {
+      return parsed.map((item) => String(item).trim());
+    }
+    return fallback;
+  } catch (err) {
+    console.warn('Gemini signal bullets generation fallback triggered:', err);
+    return fallback;
+  }
+}
+

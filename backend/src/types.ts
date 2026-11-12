@@ -12,6 +12,7 @@ export interface Signal {
   why: string;
   src: string;
   d: string;
+  bullets?: string[];
 }
 
 export interface Person {

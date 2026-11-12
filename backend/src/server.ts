@@ -8,6 +8,8 @@ import {
   buildStepContent,
   generateFullSequenceWithAI,
   generateSingleStepWithAI,
+  generateSignalBullets,
+  generateSignalBulletsWithGemini,
 } from './generator';
 import { getUserData, saveUserData, loadPersistedState } from './storage';
 import {
@@ -83,10 +85,20 @@ function getProspectTimestamp(p: Prospect): number {
 
 // Get all prospects + dashboard metrics
 app.get('/api/prospects', (req, res) => {
-  const { prospects } = getUserCtx(req);
-  const list = Object.values(prospects).sort(
-    (a, b) => getProspectTimestamp(b) - getProspectTimestamp(a)
-  );
+  const { prospects, settings, save } = getUserCtx(req);
+  let mutated = false;
+  const list = Object.values(prospects)
+    .map((p) => {
+      p.signals.forEach((s) => {
+        if (!s.bullets || s.bullets.length !== 5) {
+          s.bullets = generateSignalBullets(s, p, settings);
+          mutated = true;
+        }
+      });
+      return p;
+    })
+    .sort((a, b) => getProspectTimestamp(b) - getProspectTimestamp(a));
+  if (mutated) save();
   const companiesCount = list.length;
   const signalsCount = list.reduce((acc, p) => acc + p.signals.length, 0);
   let stepsCount = 0;
@@ -112,9 +124,17 @@ app.get('/api/prospects', (req, res) => {
 
 // Get single prospect by ID
 app.get('/api/prospects/:id', (req, res) => {
-  const { prospects } = getUserCtx(req);
+  const { prospects, settings, save } = getUserCtx(req);
   const p = prospects[req.params.id];
   if (!p) return res.status(404).json({ error: 'Prospect not found' });
+  let mutated = false;
+  p.signals.forEach((s) => {
+    if (!s.bullets || s.bullets.length !== 5) {
+      s.bullets = generateSignalBullets(s, p, settings);
+      mutated = true;
+    }
+  });
+  if (mutated) save();
   res.json(p);
 });
 
@@ -308,6 +328,11 @@ app.post('/api/prospects/:id/signals/more', async (req, res) => {
 
     const newSignals = await discoverMoreSignalsForProspect(p, settings, 3);
     if (newSignals.length > 0) {
+      for (const s of newSignals) {
+        if (!s.bullets || s.bullets.length !== 5) {
+          s.bullets = generateSignalBullets(s, p, settings);
+        }
+      }
       p.signals.push(...newSignals);
       // Auto-select newly discovered High-relevance signals
       newSignals.forEach((s) => {
@@ -326,6 +351,32 @@ app.post('/api/prospects/:id/signals/more', async (req, res) => {
   } catch (err) {
     console.error('Error discovering more signals:', err);
     res.status(500).json({ error: 'Failed to discover more signals' });
+  }
+});
+
+// GENERATE / REGENERATE 5-POINT BULLETS FOR A SIGNAL
+app.post('/api/prospects/:id/signals/:sigId/bullets', async (req, res) => {
+  try {
+    const { prospects, settings, save } = getUserCtx(req);
+    const p = prospects[req.params.id];
+    if (!p) return res.status(404).json({ error: 'Prospect not found' });
+
+    const sigId = parseInt(req.params.sigId, 10);
+    const sig = p.signals.find((s) => s.id === sigId);
+    if (!sig) return res.status(404).json({ error: 'Signal not found' });
+
+    const bullets = await generateSignalBulletsWithGemini(sig, p, settings);
+    sig.bullets = bullets;
+    save();
+
+    res.json({
+      sigId,
+      bullets,
+      prospect: p,
+    });
+  } catch (err) {
+    console.error('Error generating signal bullets:', err);
+    res.status(500).json({ error: 'Failed to generate bullets for signal' });
   }
 });
 
