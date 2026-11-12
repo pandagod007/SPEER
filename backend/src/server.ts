@@ -487,13 +487,14 @@ app.get('/api/settings', (req, res) => {
 
 app.put('/api/settings', (req, res) => {
   const { settings, save } = getUserCtx(req);
-  const { companyName, domain, category, description, senderName, offerings } = req.body;
-  if (companyName) settings.companyName = companyName;
-  if (domain) settings.domain = domain;
-  if (category) settings.category = category;
-  if (description) settings.description = description;
-  if (senderName) settings.senderName = senderName;
+  const { companyName, domain, category, description, senderName, offerings, profileCompleted } = req.body;
+  if (companyName !== undefined) settings.companyName = companyName;
+  if (domain !== undefined) settings.domain = domain;
+  if (category !== undefined) settings.category = category;
+  if (description !== undefined) settings.description = description;
+  if (senderName !== undefined) settings.senderName = senderName;
   if (Array.isArray(offerings)) settings.offerings = offerings;
+  if (typeof profileCompleted === 'boolean') settings.profileCompleted = profileCompleted;
   save();
   res.json(settings);
 });

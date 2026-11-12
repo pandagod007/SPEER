@@ -3,16 +3,16 @@ import { buildFullSequence } from './generator';
 import { enrichProspectWithMultiAgentOKFICM } from './okf_icm';
 
 export const DEFAULT_SETTINGS: CompanySettings = {
-  companyName: 'Acme Technologies',
-  domain: 'acme.ai',
-  category: 'Technology services',
-  description: 'AI engineering and enterprise solutions for manufacturing, logistics, and modern high-growth enterprises.',
-  senderName: 'Sales Lead',
+  companyName: '',
+  domain: '',
+  category: '',
+  description: '',
+  senderName: '',
   offerings: [
-    { id: 'off_1', name: 'Enterprise AI platform', desc: 'End-to-end model deployment, governance, and RAG pipelines.' },
-    { id: 'off_2', name: 'Workflow automation', desc: 'AI-powered orchestration for cross-system operational processes.' },
-    { id: 'off_3', name: 'Data pipeline toolkit', desc: 'Real-time streaming and ERP/IoT data unification across sites.' },
+    { id: 'off_1', name: 'Primary Offering', desc: 'Core product, platform, or consulting solution.' },
+    { id: 'off_2', name: 'Secondary Service', desc: 'Workflow automation, engineering, or implementation support.' },
   ],
+  profileCompleted: false,
 };
 
 export let SETTINGS: CompanySettings = { ...DEFAULT_SETTINGS };

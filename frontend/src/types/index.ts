@@ -155,4 +155,5 @@ export interface CompanySettings {
   description: string;
   senderName: string;
   offerings: Offering[];
+  profileCompleted?: boolean;
 }

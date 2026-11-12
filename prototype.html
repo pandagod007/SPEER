@@ -170,7 +170,7 @@ const S={
 const curP=()=>PROSPECTS[S.pid];
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)};
 const go=(v,pid)=>{if(pid)S.pid=pid;S.view=v;render();scrollTo(0,0)};
-const NAV=[['dash','Dashboard'],['new','Research Prospect'],['pros','Prospects'],['drafts','Outreach Drafts'],['set','Set Your Company Profile']];
+const NAV=[['dash','Dashboard'],['new','Research Prospect'],['pros','Prospects'],['drafts','Outreach Drafts'],['set','My Company']];
 
 function buildStepContent(p,stepIdx){
  const tpl=SEQ_TEMPLATE[stepIdx];
@@ -503,7 +503,7 @@ const V={
  intel,angles,draft,
  pros:()=>`<div class="row" style="align-items:center;flex:none"><div style="flex:1"><h1>Prospects directory</h1><div class="mut">All ${Object.keys(PROSPECTS).length} companies have full interactive intelligence profiles and sequences.</div></div><button class="btn" style="flex:0 0 auto" onclick="go('new')">+ Research new prospect</button></div>${prospectTable()}`,
  drafts:()=>`<div class="row" style="align-items:center;flex:none"><div style="flex:1"><h1>Outreach sequences & drafts</h1><div class="mut">Click any step below to edit or approve inside the sequence builder.</div></div></div>${draftsTable()}`,
- set:()=>`<h1>Set your company profile</h1><div class="grid"><div class="card"><h2>Algoworks</h2><div class="mut">algoworks.com · Technology services</div><label>Description</label><textarea style="min-height:90px">AI engineering and enterprise AI solutions for manufacturing, logistics, and high-growth enterprises.</textarea><button class="btn" style="margin-top:12px" onclick="toast('Profile saved')">Save changes</button></div><div class="card"><h2>Offerings</h2>${S.offerings.map(x=>`<div class="ev"><span><b>${x.name}</b><br><span class="mut" style="font-size:12px">${x.desc}</span></span><span class="mut">Active</span></div>`).join('')}<button class="btn sec" style="margin-top:12px" onclick="toast('Synced offerings from algoworks.com')">Import from website</button></div></div>`
+ set:()=>`<h1>My Company</h1><div class="grid"><div class="card"><h2>Algoworks</h2><div class="mut">algoworks.com · Technology services</div><label>Description</label><textarea style="min-height:90px">AI engineering and enterprise AI solutions for manufacturing, logistics, and high-growth enterprises.</textarea><button class="btn" style="margin-top:12px" onclick="toast('Profile saved')">Save changes</button></div><div class="card"><h2>Offerings</h2>${S.offerings.map(x=>`<div class="ev"><span><b>${x.name}</b><br><span class="mut" style="font-size:12px">${x.desc}</span></span><span class="mut">Active</span></div>`).join('')}<button class="btn sec" style="margin-top:12px" onclick="toast('Synced offerings from algoworks.com')">Import from website</button></div></div>`
 };
 
 const STG=['Identifying company','Enriching company profile','Discovering business signals','Researching decision-makers','Consolidating research','Preparing multi-step sequence'];

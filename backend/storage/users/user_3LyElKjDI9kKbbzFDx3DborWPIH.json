@@ -2,28 +2,24 @@
   "userId": "user_3LyElKjDI9kKbbzFDx3DborWPIH",
   "prospects": {},
   "settings": {
-    "companyName": "Acme Technologies",
-    "domain": "acme.ai",
-    "category": "Technology services",
-    "description": "AI engineering and enterprise solutions for manufacturing, logistics, and modern high-growth enterprises.",
-    "senderName": "Sales Lead",
+    "companyName": "",
+    "domain": "",
+    "category": "",
+    "description": "",
+    "senderName": "",
     "offerings": [
       {
         "id": "off_1",
-        "name": "Enterprise AI platform",
-        "desc": "End-to-end model deployment, governance, and RAG pipelines."
+        "name": "Primary Offering",
+        "desc": "Describe your primary product or service here."
       },
       {
         "id": "off_2",
-        "name": "Workflow automation",
-        "desc": "AI-powered orchestration for cross-system operational processes."
-      },
-      {
-        "id": "off_3",
-        "name": "Data pipeline toolkit",
-        "desc": "Real-time streaming and ERP/IoT data unification across sites."
+        "name": "Secondary Service",
+        "desc": "Describe your secondary service or workflow automation solution."
       }
-    ]
+    ],
+    "profileCompleted": false
   },
-  "updatedAt": "2026-11-11T23:05:00.000Z"
+  "updatedAt": "2026-11-11T23:45:00.000Z"
 }

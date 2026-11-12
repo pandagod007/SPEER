@@ -502,20 +502,39 @@ export default function ProspectIQApp() {
     );
   }
 
+  const isProfileCompleted = Boolean(
+    settings &&
+    settings.profileCompleted &&
+    settings.companyName?.trim() &&
+    settings.domain?.trim()
+  );
+
+  const effectiveView: ViewMode =
+    !loading && settings && !isProfileCompleted ? 'set' : view;
+
+  const handleNavClick = (target: ViewMode) => {
+    if (!isProfileCompleted && target !== 'set') {
+      showToast('⚠️ Please complete and save your company profile first.');
+      setView('set');
+      return;
+    }
+    setView(target);
+  };
+
   const navItems: Array<[ViewMode, string]> = [
     ['dash', 'Dashboard'],
     ['new', 'Research Prospect'],
     ['pros', 'Prospects'],
     ['drafts', 'Outreach Drafts'],
-    ['set', 'Set Your Company Profile'],
+    ['set', 'My Company'],
   ];
 
   const activeNavKey: ViewMode =
-    view === 'intel' || view === 'angles'
+    effectiveView === 'intel' || effectiveView === 'angles'
       ? 'pros'
-      : view === 'draft'
+      : effectiveView === 'draft'
       ? 'drafts'
-      : view;
+      : effectiveView;
 
   const filteredProspects = sortProspectsLatestFirst(
     prospects.filter((p) => {
@@ -877,15 +896,27 @@ export default function ProspectIQApp() {
             <img src="/logo.png" alt="speer logo" />
             speer
           </div>
-          {navItems.map(([key, label]) => (
-            <button
-              key={key}
-              className={activeNavKey === key ? 'on' : ''}
-              onClick={() => setView(key)}
-            >
-              {label}
-            </button>
-          ))}
+          {navItems.map(([key, label]) => {
+            const isLocked = !isProfileCompleted && key !== 'set';
+            return (
+              <button
+                key={key}
+                className={activeNavKey === key ? 'on' : ''}
+                onClick={() => handleNavClick(key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  opacity: isLocked ? 0.45 : 1,
+                  cursor: isLocked ? 'not-allowed' : 'pointer',
+                }}
+                title={isLocked ? 'Complete your company profile first' : label}
+              >
+                <span>{label}</span>
+                {isLocked && <span style={{ fontSize: 11, opacity: 0.8 }}>🔒</span>}
+              </button>
+            );
+          })}
 
           <div
             style={{
@@ -897,10 +928,11 @@ export default function ProspectIQApp() {
           >
             <button
               type="button"
-              onClick={() => setView('prog')}
+              onClick={() => handleNavClick('prog')}
               style={{
                 all: 'unset',
-                cursor: 'pointer',
+                cursor: !isProfileCompleted ? 'not-allowed' : 'pointer',
+                opacity: !isProfileCompleted ? 0.45 : 1,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
@@ -912,6 +944,7 @@ export default function ProspectIQApp() {
                 transition: 'color 0.15s ease',
                 width: 'fit-content',
               }}
+              title={!isProfileCompleted ? 'Complete your company profile first' : 'Live pipeline validator'}
             >
               <i
                 className={`status-dot ${isRunningLive ? 'yellow' : 'green'}`}
@@ -986,7 +1019,7 @@ export default function ProspectIQApp() {
 
         <main className="main-area">
           {/* DASHBOARD VIEW */}
-          {view === 'dash' && (
+          {effectiveView === 'dash' && (
             <>
               <div
                 className="row"
@@ -1300,7 +1333,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* NEW PROSPECT VIEW */}
-          {view === 'new' && (
+          {effectiveView === 'new' && (
             <>
               <div>
                 <h1>Research live prospect online</h1>
@@ -1387,7 +1420,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* LIVE RUN VIEW (SHOWING EACH STAGE AS IT EXECUTES) */}
-          {view === 'prog' && (() => {
+          {effectiveView === 'prog' && (() => {
             const totalStages = PIPELINE_STAGES.length;
             const activeTargetName = isRunningLive
               ? researchingName || curP?.name || 'Prospect'
@@ -1641,7 +1674,7 @@ export default function ProspectIQApp() {
           })()}
 
           {/* EMPTY PROSPECT STATE FOR INTEL / ANGLES / DRAFT */}
-          {(view === 'intel' || view === 'angles' || view === 'draft') && !curP && (
+          {(effectiveView === 'intel' || effectiveView === 'angles' || effectiveView === 'draft') && !curP && (
             <div
               className="card"
               style={{
@@ -1670,7 +1703,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* PROSPECT INTELLIGENCE VIEW */}
-          {view === 'intel' && curP && (
+          {effectiveView === 'intel' && curP && (
             <>
               <div
                 style={{
@@ -1968,7 +2001,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* OUTREACH ANGLES VIEW */}
-          {view === 'angles' && curP && (
+          {effectiveView === 'angles' && curP && (
             <>
               {renderProspectSwitcher()}
               <div>
@@ -2072,7 +2105,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* MULTI-STEP SEQUENCE DRAFT VIEW */}
-          {view === 'draft' && curP && (() => {
+          {effectiveView === 'draft' && curP && (() => {
             const person = curP.people[curP.contactIdx] || curP.people[0];
             const seq = curP.sequence;
             const curStep = seq[stepIdx] || seq[0];
@@ -2398,7 +2431,7 @@ export default function ProspectIQApp() {
           })()}
 
           {/* PROSPECTS DIRECTORY VIEW (CARDS) */}
-          {view === 'pros' && (
+          {effectiveView === 'pros' && (
             <>
               <div
                 className="row"
@@ -2605,7 +2638,7 @@ export default function ProspectIQApp() {
           )}
 
           {/* OUTREACH DRAFTS VIEW (LIST) */}
-          {view === 'drafts' && (
+          {effectiveView === 'drafts' && (
             <>
               <div
                 className="row"
@@ -2679,65 +2712,107 @@ export default function ProspectIQApp() {
           )}
 
           {/* COMPANY SETTINGS VIEW */}
-          {view === 'set' && settings && (
+          {effectiveView === 'set' && settings && (
             <>
               <div>
-                <h1>Set your company profile</h1>
+                <h1>My Company</h1>
                 <div className="mut">
                   Configure your company profile and default outreach persona used by the AI engine.
                 </div>
               </div>
+
+              {!isProfileCompleted && (
+                <div
+                  style={{
+                    background: 'var(--red, #b3261e)',
+                    color: '#ffffff',
+                    borderRadius: 18,
+                    padding: '14px 20px',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    lineHeight: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    boxShadow: '0 4px 16px rgba(179, 38, 30, 0.25)',
+                  }}
+                >
+                  Add your company details so Speer can better understand your business and personalize prospect research and outreach.
+                </div>
+              )}
+
               <div className="grid-cards">
                 <div className="card">
                   <h2>Company Profile</h2>
                   <div className="mut" style={{ fontSize: 13, marginBottom: 8 }}>
                     Used to match target company buying signals to what your business does.
                   </div>
-                  <label>Company Name</label>
+                  <label>Company Name *</label>
                   <input
-                    value={settings.companyName}
+                    placeholder="e.g. Acme Innovations"
+                    value={settings.companyName || ''}
                     onChange={(e) =>
                       setSettings({ ...settings, companyName: e.target.value })
                     }
                   />
                   <label>Industry / Category</label>
                   <input
-                    value={settings.category}
+                    placeholder="e.g. Enterprise Software & AI"
+                    value={settings.category || ''}
                     onChange={(e) =>
                       setSettings({ ...settings, category: e.target.value })
                     }
                   />
-                  <label>Company Website Domain</label>
+                  <label>Company Website Domain *</label>
                   <input
-                    value={settings.domain}
+                    placeholder="e.g. acme.com"
+                    value={settings.domain || ''}
                     onChange={(e) =>
                       setSettings({ ...settings, domain: e.target.value })
                     }
                   />
                   <label>Company & Solutions Description</label>
                   <textarea
+                    placeholder="Describe what your company does and what problems you solve for customers…"
                     style={{ minHeight: 110 }}
-                    value={settings.description}
+                    value={settings.description || ''}
                     onChange={(e) =>
                       setSettings({ ...settings, description: e.target.value })
                     }
                   />
                   <button
                     className="btn"
-                    style={{ marginTop: 14 }}
+                    style={{ marginTop: 16 }}
                     onClick={async () => {
+                      if (!settings.companyName?.trim()) {
+                        showToast('⚠️ Please enter your company name');
+                        return;
+                      }
+                      if (!settings.domain?.trim()) {
+                        showToast('⚠️ Please enter your company website domain');
+                        return;
+                      }
+                      const payload = {
+                        ...settings,
+                        profileCompleted: true,
+                      };
                       const res = await authFetch('/api/settings', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(settings),
+                        body: JSON.stringify(payload),
                       });
                       if (res.ok) {
-                        setSettings(await res.json());
-                        showToast('Company profile saved to disk');
+                        const saved = await res.json();
+                        setSettings(saved);
+                        if (!isProfileCompleted) {
+                          showToast('Company profile saved! Workspace unlocked 🎉');
+                          setView('dash');
+                        } else {
+                          showToast('Company profile saved');
+                        }
                       }
                     }}
                   >
-                    Save changes
+                    {!isProfileCompleted ? 'Save & Continue to Dashboard →' : 'Save changes'}
                   </button>
                 </div>
 
