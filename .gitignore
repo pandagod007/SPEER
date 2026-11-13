@@ -16,6 +16,10 @@ out/
 **/.env
 **/.env.*
 
+# Runtime storage
+storage/
+**/storage/
+
 # Logs & OS files
 *.log
 npm-debug.log*
